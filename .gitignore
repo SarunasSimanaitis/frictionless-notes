@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+.expo-cache/
+.expo-home/
+.expo-export*/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# local Codex runtime, bundler, and verification output
+.codex-runtime/
+.temp-bundler/
+work/
+
+# local dependency store used only during setup
+.pnpm-store/
+.tool-cache/
+editor-web/build/index.html

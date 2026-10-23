@@ -1,0 +1,45 @@
+{
+  "name": "frictionless-notes",
+  "description": "A calm, offline-first notes and checklist app.",
+  "license": "0BSD",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@10play/tentap-editor": "^1.1.0",
+    "@react-native-community/datetimepicker": "9.1.0",
+    "@tiptap/extension-text-style": "3.32.0",
+    "expo": "~57.0.31",
+    "expo-file-system": "~57.0.7",
+    "expo-image-picker": "~57.0.20",
+    "expo-notifications": "57.0.23",
+    "expo-sqlite": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-draggable-flatlist": "4.0.3",
+    "react-native-gesture-handler": "2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-webview": "13.16.1",
+    "react-native-worklets": "0.10.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "react-dom": "19.2.3",
+    "typescript": "~6.0.3",
+    "vite": "7.3.7",
+    "vite-plugin-singlefile": "2.3.4"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --experimental-sqlite --test",
+    "editor:build": "vite --config editor-web/vite.config.ts build && node ./node_modules/@10play/tentap-editor/scripts/buildEditor.js ./editor-web/build/index.html",
+    "postinstall": "node scripts/patch-draggable-flatlist.cjs && npm run editor:build"
+  }
+}
