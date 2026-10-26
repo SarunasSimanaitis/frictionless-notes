@@ -27,6 +27,7 @@ const topicShimSource = readFileSync(new URL('../src/shims/TopicSubscriptionModu
 const topicSubscriptionSource = readFileSync(new URL('../node_modules/expo-notifications/src/topicSubscription.ts', import.meta.url), 'utf8');
 const appConfig = JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8'));
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const easConfig = JSON.parse(readFileSync(new URL('../eas.json', import.meta.url), 'utf8'));
 const imageStorageSource = readFileSync(new URL('../src/noteImages.ts', import.meta.url), 'utf8');
 const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingToolbar.tsx', import.meta.url), 'utf8');
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
@@ -134,6 +135,12 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
   assert.match(textDocumentSource, /Make image smaller/);
   assert.match(textDocumentSource, /Make image larger/);
+  assert.match(textDocumentSource, /PanResponder\.create/);
+  assert.match(textDocumentSource, /offsetX: next\.x, offsetY: next\.y/);
+  assert.match(textDocumentSource, /accessibilityLabel="Drag to reposition this image"/);
+  assert.match(stylesSource, /inlineImageDragHandle:/);
+  assert.equal(easConfig.build.preview.distribution, 'internal');
+  assert.equal(easConfig.build.preview.android.buildType, 'apk');
   assert.match(textDocumentSource, /onError=\{\(\) => setImageUnavailable\(true\)\}/);
   assert.match(textDocumentSource, /Image unavailable on this device/);
   assert.match(textDocumentSource, /accessibilityLabel="Image unavailable on this device\. Replace or remove it\."/);
