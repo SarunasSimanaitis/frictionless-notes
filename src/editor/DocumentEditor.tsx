@@ -584,7 +584,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
           {...panResponder.panHandlers}
           style={styles.inlineImageDragHandle}
         >
-          <Text style={styles.inlineImageDragHandleText}>↕ Drag</Text>
+          <Text style={styles.inlineImageDragHandleText}>Drag to move</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
