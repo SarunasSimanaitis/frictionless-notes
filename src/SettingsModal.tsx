@@ -2,6 +2,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from './BackButton';
 import type { AppPreferences } from './types';
 import type { NotificationPermission } from './notifications';
 
@@ -49,9 +50,12 @@ export function SettingsModal({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" onPress={onClose} style={styles.headerAction}>
-            <Text style={styles.headerActionText}>‹ Notes</Text>
-          </Pressable>
+          <BackButton
+            label="Notes"
+            accessibilityLabel="Back to notes"
+            onPress={onClose}
+            style={styles.headerAction}
+          />
           <Text style={styles.headerTitle}>Settings</Text>
           <View style={styles.headerAction} />
         </View>
@@ -131,8 +135,7 @@ export function SettingsModal({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { minHeight: 58, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerAction: { minWidth: 78, minHeight: 48, justifyContent: 'center' },
-  headerActionText: { color: palette.accent, fontSize: 15, fontWeight: '600' },
+  headerAction: { minWidth: 88, minHeight: 48, flexDirection: 'row', alignItems: 'center' },
   headerTitle: { color: palette.ink, fontSize: 19, fontWeight: '700' },
   content: { paddingHorizontal: 22, paddingTop: 18 },
   eyebrow: { color: palette.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.1, marginBottom: 13 },
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
   permissionCard: { padding: 15, marginTop: 12, borderRadius: 15, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
   permissionTitle: { color: palette.ink, fontSize: 14, fontWeight: '600' },
   permissionDescription: { color: palette.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
-  systemSettingsButton: { alignSelf: 'flex-start', marginTop: 12, paddingVertical: 8, paddingHorizontal: 11, borderRadius: 11, backgroundColor: palette.accentSoft },
+  systemSettingsButton: { alignSelf: 'flex-start', minHeight: 48, marginTop: 12, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
   systemSettingsText: { color: palette.accent, fontSize: 13, fontWeight: '700' },
   sectionRule: { height: StyleSheet.hairlineWidth, backgroundColor: palette.line, marginTop: 24, marginBottom: 24 },
   timeButton: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, marginTop: 12, borderRadius: 14, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },

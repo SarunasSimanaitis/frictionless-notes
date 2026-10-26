@@ -5,6 +5,7 @@ import {
   Switch, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from './BackButton';
 import type { NotesRepository } from './repository';
 import { createReminder, dateAtTime, nextAfterWorkDate, selectPrimaryNoteReminder } from './model';
 import { cancelReminderNotifications, checkNotificationPermission, requestNotificationPermission, syncReminderNotification } from './notifications';
@@ -285,13 +286,12 @@ export function ReminderModal({
     <Modal visible={visible} animationType="slide" onRequestClose={creating ? closeComposer : onClose}>
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
+          <BackButton
+            label={creating ? 'Reminders' : 'Note'}
+            accessibilityLabel={creating ? 'Back to reminders' : 'Back to note'}
             onPress={creating ? closeComposer : onClose}
             style={styles.headerAction}
-          >
-            <Text style={styles.headerActionText}>‹ {creating ? 'Reminders' : 'Note'}</Text>
-          </Pressable>
+          />
           <Text style={styles.headerTitle}>{creating ? 'Reminder' : 'Reminders'}</Text>
           {creating ? (
             <Pressable accessibilityRole="button" onPress={saveFromComposer} disabled={busy} style={styles.headerActionRight}>
@@ -458,8 +458,8 @@ function PresetButton({ title, onPress, wide = false }: { title: string; onPress
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { minHeight: 58, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerAction: { minWidth: 85, minHeight: 48, justifyContent: 'center' },
-  headerActionRight: { minWidth: 70, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
+  headerAction: { minWidth: 88, minHeight: 48, flexDirection: 'row', alignItems: 'center' },
+  headerActionRight: { minWidth: 88, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
   headerActionText: { color: palette.accent, fontSize: 15, fontWeight: '700' },
   headerTitle: { color: palette.ink, fontSize: 18, fontWeight: '700' },
   manager: { flex: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 18 },
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   reminderStatus: { color: palette.accent, fontSize: 11, fontWeight: '700', marginTop: 6 },
   disabledStatus: { color: palette.muted },
   reminderActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 5 },
-  reminderAction: { minWidth: 62, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  reminderAction: { minWidth: 62, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   reminderActionText: { color: palette.accent, fontSize: 13, fontWeight: '700' },
   deleteActionText: { color: palette.danger, fontSize: 13, fontWeight: '600' },
   emptyState: { alignItems: 'center', paddingHorizontal: 18 },

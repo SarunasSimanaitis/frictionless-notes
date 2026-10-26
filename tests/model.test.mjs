@@ -117,6 +117,21 @@ test('custom note styling and rich blocks restore while text remains searchable'
   });
 });
 
+test('custom note image placement and expanded size persist with bounded legacy-safe values', () => {
+  const image = {
+    id: 'movable-image', type: 'image', uri: 'file:///app/note-images/photo.jpg',
+    width: 1200, height: 800, scale: 1.4, offsetX: 0.35, offsetY: -0.6,
+  };
+  assert.deepEqual(readNoteBlocks(JSON.stringify([image]), '', 'note-1')[0], image);
+
+  const bounded = readNoteBlocks(JSON.stringify([{
+    ...image, scale: 9, offsetX: -4, offsetY: 4,
+  }]), '', 'note-1')[0];
+  assert.equal(bounded.scale, 1.5);
+  assert.equal(bounded.offsetX, -0.5);
+  assert.equal(bounded.offsetY, 1);
+});
+
 test('updating a draft preserves its ID and advances the modification time', () => {
   const note = createNote('text', 10, 'note-1');
   const updated = updateNoteDraft(note, { title: 'Ideas', body: 'One thought' }, 20);

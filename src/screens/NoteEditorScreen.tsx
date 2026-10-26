@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { EditorBridge } from '@10play/tentap-editor';
@@ -25,6 +26,7 @@ import { TextDocumentEditor } from '../editor/DocumentEditor';
 import { ChecklistEditor } from '../lists/ChecklistEditor';
 import { palette } from '../theme';
 import { styles } from '../styles';
+import { BackButton } from '../BackButton';
 import { noteTypeLabels } from '../noteLabels';
 import type { NotificationPermission } from '../notifications';
 import type { AppPreferences, Note, NoteBlock, Reminder } from '../types';
@@ -61,7 +63,7 @@ export function NoteEditorScreen({
   }), []);
   const noteRef = useRef(initialNote);
   const appState = useRef(AppState.currentState);
-  const bodyRef = useRef<TextInput>(null);
+  const bodyRef = useRef<TextInputInstance>(null);
   const firstRichEditorRef = useRef<EditorBridge | null>(null);
   const persistCurrent = useCallback(async () => {
     if (saveTimer.current) {
@@ -221,10 +223,12 @@ export function NoteEditorScreen({
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
         <View style={styles.editorHeader}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to notes" onPress={() => void leaveEditor()} style={styles.headerAction}>
-            <Text style={styles.backArrow}>‹</Text>
-            <Text style={styles.headerActionText}>Notes</Text>
-          </Pressable>
+          <BackButton
+            label="Notes"
+            accessibilityLabel="Back to notes"
+            onPress={() => void leaveEditor()}
+            style={styles.headerAction}
+          />
           <Text style={styles.saveState}>{saving ? 'Saving…' : saveFailed ? 'Not saved' : 'Saved'}</Text>
           <Pressable
             accessibilityRole="button"

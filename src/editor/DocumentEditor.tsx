@@ -1,9 +1,9 @@
 import {
-  Alert, Image, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputInstance, type ViewStyle,
 } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer, type RenderItemParams } from 'react-native-draggable-flatlist';
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { RichText, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge } from '@10play/tentap-editor';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { RichText, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
 import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
 import { NoteFontFormattingBridge } from './fontFormattingBridge';
 import { editorHtml } from '../../editor-web/build/editorHtml';
@@ -20,9 +20,16 @@ import type {
 } from '../types';
 import { customNoteCss } from './customNoteCss';
 
+type ShallowEditorThemeOptions = Omit<EditorBridgeOptions, 'theme'> & {
+  theme?: { webview?: StyleProp<ViewStyle>; webviewContainer?: StyleProp<ViewStyle> };
+};
+
+// TenTap's recursive theme type expands React Native 0.88's StyleProp until TypeScript hits its depth limit.
+const useEditorBridgeWithTheme = useEditorBridge as unknown as (options?: ShallowEditorThemeOptions) => EditorBridge;
+
 export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEditorRef, onBlocksChange, onBlocksCommit, onAppearanceChange }: {
   note: Note;
-  firstParagraphInputRef: MutableRefObject<TextInput | null>;
+  firstParagraphInputRef: MutableRefObject<TextInputInstance | null>;
   firstRichEditorRef: MutableRefObject<EditorBridge | null>;
   onBlocksChange: (blocks: NoteBlock[]) => void;
   onBlocksCommit: (blocks: NoteBlock[], obsoleteImageUris?: string[]) => Promise<boolean>;
@@ -32,7 +39,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   const [pageStyleOpen, setPageStyleOpen] = useState(false);
   const [activeRichEditor, setActiveRichEditor] = useState<ActiveRichEditor | null>(null);
   const activeRichEditorRef = useRef<ActiveRichEditor | null>(null);
-  const paragraphRefs = useRef(new Map<string, TextInput>());
+  const paragraphRefs = useRef(new Map<string, TextInputInstance>());
   const selections = useRef(new Map<string, { start: number; end: number }>());
   const focusedBlockId = useRef<string | null>(null);
   const focusAfterInsert = useRef<string | null>(null);
@@ -287,7 +294,11 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
   onChange: (html: string, text: string) => void;
 }) {
   const backgroundColor = noteBackgroundColors[appearance.background];
-  const editor = useEditorBridge({
+  const editorTheme = {
+    webview: { backgroundColor },
+    webviewContainer: { backgroundColor },
+  };
+  const editor = useEditorBridgeWithTheme({
     initialContent: block.richHtml ?? textAsHtml(block.text),
     customSource: editorHtml,
     bridgeExtensions: [NoteFontFormattingBridge],
@@ -295,10 +306,7 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
     avoidKeyboard: true,
     dynamicHeight: true,
     scrollBottomOffset: 18,
-    theme: {
-      webview: { backgroundColor },
-      webviewContainer: { backgroundColor },
-    },
+    theme: editorTheme,
   });
   const editorState = useBridgeState(editor);
   const html = useEditorContent(editor, { type: 'html', debounceInterval: 220 });
@@ -439,13 +447,69 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
   const [busy, setBusy] = useState(false);
   const [imageUnavailable, setImageUnavailable] = useState(false);
   const imageAspect = image.width / image.height;
-  const imageScale = Math.max(0.25, Math.min(1, image.scale ?? 1));
+  const imageScale = Math.max(0.2, Math.min(1.5, image.scale ?? 1));
   const requestedWidth = availableWidth * imageScale;
   const imageHeight = Math.min(requestedWidth / imageAspect, 480);
   const imageWidth = imageHeight * imageAspect;
+  const [offset, setOffset] = useState({ x: image.offsetX ?? 0, y: image.offsetY ?? 0 });
+  const offsetRef = useRef(offset);
+  const dragOrigin = useRef(offset);
+  const clampOffset = (x: number, y: number) => ({
+    x: Math.max(-0.5, Math.min(0.5, x)),
+    y: Math.max(-1, Math.min(1, y)),
+  });
+  useEffect(() => {
+    const savedOffset = clampOffset(image.offsetX ?? 0, image.offsetY ?? 0);
+    offsetRef.current = savedOffset;
+    setOffset(savedOffset);
+  }, [image.offsetX, image.offsetY]);
+
+  const commitOffset = useCallback(async (x: number, y: number) => {
+    const previous = dragOrigin.current;
+    const next = clampOffset(x, y);
+    offsetRef.current = next;
+    setOffset(next);
+    setBusy(true);
+    try {
+      const saved = await onBlocksCommit(blocks.map((block) => block.id === image.id && block.type === 'image'
+        ? { ...block, offsetX: next.x, offsetY: next.y }
+        : block));
+      if (!saved) throw new Error('Image position was not saved.');
+    } catch {
+      offsetRef.current = previous;
+      setOffset(previous);
+      Alert.alert('Could not move image', 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }, [blocks, image.id, onBlocksCommit]);
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_event, gesture) => !busy && Math.hypot(gesture.dx, gesture.dy) > 3,
+    onPanResponderGrant: () => { dragOrigin.current = offsetRef.current; },
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderMove: (_event, gesture) => {
+      const next = clampOffset(
+        dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
+        dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
+      );
+      offsetRef.current = next;
+      setOffset(next);
+    },
+    onPanResponderRelease: (_event, gesture) => {
+      void commitOffset(
+        dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
+        dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
+      );
+    },
+    onPanResponderTerminate: () => {
+      offsetRef.current = dragOrigin.current;
+      setOffset(dragOrigin.current);
+    },
+  }), [availableWidth, busy, commitOffset]);
 
   const changeScale = async (delta: number) => {
-    const nextScale = Math.round(Math.max(0.25, Math.min(1, imageScale + delta)) * 100) / 100;
+    const nextScale = Math.round(Math.max(0.2, Math.min(1.5, imageScale + delta)) * 100) / 100;
     if (nextScale === imageScale || busy) return;
     setBusy(true);
     try {
@@ -493,7 +557,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
           accessible
           accessibilityRole="text"
           accessibilityLabel="Image unavailable on this device. Replace or remove it."
-          style={[styles.inlineImageUnavailable, { width: imageWidth, height: imageHeight }]}
+          style={[styles.inlineImageUnavailable, { width: imageWidth, height: imageHeight, transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }]}
         >
           <Text style={styles.inlineImageUnavailableText}>Image unavailable on this device</Text>
         </View>
@@ -503,14 +567,37 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
           source={{ uri: image.uri }}
           resizeMode="contain"
           onError={() => setImageUnavailable(true)}
-          style={{ width: imageWidth, height: imageHeight, alignSelf: 'center' }}
+          style={{ width: imageWidth, height: imageHeight, alignSelf: 'center', transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }}
         />
       )}
       <View style={styles.inlineImageActions}>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Drag to reposition this image"
+          accessibilityActions={[
+            { name: 'moveLeft', label: 'Move image left' },
+            { name: 'moveRight', label: 'Move image right' },
+            { name: 'moveUp', label: 'Move image up' },
+            { name: 'moveDown', label: 'Move image down' },
+          ]}
+          onAccessibilityAction={({ nativeEvent }) => {
+            const current = offsetRef.current;
+            dragOrigin.current = current;
+            const step = 0.08;
+            void commitOffset(
+              current.x + (nativeEvent.actionName === 'moveRight' ? step : nativeEvent.actionName === 'moveLeft' ? -step : 0),
+              current.y + (nativeEvent.actionName === 'moveDown' ? step : nativeEvent.actionName === 'moveUp' ? -step : 0),
+            );
+          }}
+          {...panResponder.panHandlers}
+          style={styles.inlineImageDragHandle}
+        >
+          <Text style={styles.inlineImageDragHandleText}>Drag to move</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Make image smaller"
-          disabled={busy || imageScale <= 0.25}
+          disabled={busy || imageScale <= 0.2}
           onPress={() => void changeScale(-0.15)}
           style={styles.inlineImageAction}
         >
@@ -519,7 +606,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Make image larger"
-          disabled={busy || imageScale >= 1}
+          disabled={busy || imageScale >= 1.5}
           onPress={() => void changeScale(0.15)}
           style={styles.inlineImageAction}
         >

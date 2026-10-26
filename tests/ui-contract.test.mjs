@@ -5,6 +5,7 @@ import test from 'node:test';
 const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const homeScreenSource = readFileSync(new URL('../src/screens/HomeScreen.tsx', import.meta.url), 'utf8');
 const noteEditorSource = readFileSync(new URL('../src/screens/NoteEditorScreen.tsx', import.meta.url), 'utf8');
+const backButtonSource = readFileSync(new URL('../src/BackButton.tsx', import.meta.url), 'utf8');
 const checklistEditorSource = readFileSync(new URL('../src/lists/ChecklistEditor.tsx', import.meta.url), 'utf8');
 const noteLabelsSource = readFileSync(new URL('../src/noteLabels.ts', import.meta.url), 'utf8');
 const repositorySource = readFileSync(new URL('../src/repository.ts', import.meta.url), 'utf8');
@@ -27,6 +28,7 @@ const topicShimSource = readFileSync(new URL('../src/shims/TopicSubscriptionModu
 const topicSubscriptionSource = readFileSync(new URL('../node_modules/expo-notifications/src/topicSubscription.ts', import.meta.url), 'utf8');
 const appConfig = JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8'));
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const easConfig = JSON.parse(readFileSync(new URL('../eas.json', import.meta.url), 'utf8'));
 const imageStorageSource = readFileSync(new URL('../src/noteImages.ts', import.meta.url), 'utf8');
 const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingToolbar.tsx', import.meta.url), 'utf8');
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
@@ -112,7 +114,7 @@ test('ordinary notes insert a checklist at the focused cursor and retain text as
 
 test('Custom Notes use a custom TenTap bundle for rich text and keep style and image assets in structured local storage', () => {
   assert.equal(packageJson.dependencies['@10play/tentap-editor'], '^1.1.0');
-  assert.equal(packageJson.dependencies['react-native-webview'], '13.16.1');
+  assert.equal(packageJson.dependencies['react-native-webview'], '14.0.1');
   assert.match(documentEditorSource, /import \{[\s\S]*RichText, useBridgeState, useEditorBridge,[\s\S]*\} from '@10play\/tentap-editor'/);
   assert.match(textDocumentSource, /isCustom \? \([\s\S]*?<RichParagraphEditor/);
   assert.match(textDocumentSource, /<FormattingToolbar/);
@@ -134,6 +136,27 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
   assert.match(textDocumentSource, /Make image smaller/);
   assert.match(textDocumentSource, /Make image larger/);
+  assert.doesNotMatch(textDocumentSource, /inlineImageMoveControls|inlineImageMoveGlyph/);
+  assert.match(backButtonSource, /appStyles\.backArrow/);
+  for (const source of [noteEditorSource, settingsSource, reminderSource]) {
+    assert.match(source, /<BackButton/);
+  }
+  assert.match(stylesSource, /backArrow:\s*\{\s*width: 18,[\s\S]*?fontSize: 22/);
+  assert.match(settingsSource, /headerAction: \{ minWidth: 88, minHeight: 48/);
+  assert.match(reminderSource, /headerAction: \{ minWidth: 88, minHeight: 48/);
+  assert.match(reminderSource, /headerActionRight: \{ minWidth: 88, minHeight: 48/);
+  assert.match(formattingToolbarSource, /button:\s*\{\s*minWidth: 48,\s*minHeight: 48/);
+  assert.match(formattingToolbarSource, /actionOption:\s*\{\s*minHeight: 44/);
+  assert.match(stylesSource, /documentInsertButton:\s*\{\s*minHeight: 44/);
+  assert.match(reminderSource, /reminderAction: \{ minWidth: 62, minHeight: 48/);
+  assert.match(settingsSource, /systemSettingsButton: \{ alignSelf: 'flex-start', minHeight: 48/);
+  assert.match(textDocumentSource, /imageScale >= 1\.5/);
+  assert.match(textDocumentSource, /PanResponder\.create/);
+  assert.match(textDocumentSource, /offsetX: next\.x, offsetY: next\.y/);
+  assert.match(textDocumentSource, /accessibilityLabel="Drag to reposition this image"/);
+  assert.match(stylesSource, /inlineImageDragHandle:/);
+  assert.equal(easConfig.build.preview.distribution, 'internal');
+  assert.equal(easConfig.build.preview.android.buildType, 'apk');
   assert.match(textDocumentSource, /onError=\{\(\) => setImageUnavailable\(true\)\}/);
   assert.match(textDocumentSource, /Image unavailable on this device/);
   assert.match(textDocumentSource, /accessibilityLabel="Image unavailable on this device\. Replace or remove it\."/);

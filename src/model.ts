@@ -187,7 +187,13 @@ export function readNoteBlocks(serialized: string | null, legacyBody: string, no
               width: Number.isFinite(width) && width > 0 ? width : 1,
               height: Number.isFinite(height) && height > 0 ? height : 1,
               ...(Number.isFinite(Number(value.scale))
-                ? { scale: Math.max(0.25, Math.min(1, Number(value.scale))) }
+                ? { scale: Math.max(0.2, Math.min(1.5, Number(value.scale))) }
+                : {}),
+              ...(Number.isFinite(Number(value.offsetX))
+                ? { offsetX: Math.max(-0.5, Math.min(0.5, Number(value.offsetX))) }
+                : {}),
+              ...(Number.isFinite(Number(value.offsetY))
+                ? { offsetY: Math.max(-1, Math.min(1, Number(value.offsetY))) }
                 : {}),
             });
           }
