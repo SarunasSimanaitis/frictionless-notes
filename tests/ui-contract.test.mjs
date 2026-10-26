@@ -5,6 +5,7 @@ import test from 'node:test';
 const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const homeScreenSource = readFileSync(new URL('../src/screens/HomeScreen.tsx', import.meta.url), 'utf8');
 const noteEditorSource = readFileSync(new URL('../src/screens/NoteEditorScreen.tsx', import.meta.url), 'utf8');
+const backButtonSource = readFileSync(new URL('../src/BackButton.tsx', import.meta.url), 'utf8');
 const checklistEditorSource = readFileSync(new URL('../src/lists/ChecklistEditor.tsx', import.meta.url), 'utf8');
 const noteLabelsSource = readFileSync(new URL('../src/noteLabels.ts', import.meta.url), 'utf8');
 const repositorySource = readFileSync(new URL('../src/repository.ts', import.meta.url), 'utf8');
@@ -135,8 +136,15 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
   assert.match(textDocumentSource, /Make image smaller/);
   assert.match(textDocumentSource, /Make image larger/);
-  assert.match(textDocumentSource, /accessibilityLabel="Move image left"/);
-  assert.match(textDocumentSource, /inlineImageMoveGlyph/);
+  assert.doesNotMatch(textDocumentSource, /inlineImageMoveControls|inlineImageMoveGlyph/);
+  assert.match(backButtonSource, /styles\.backArrow/);
+  for (const source of [noteEditorSource, settingsSource, reminderSource]) {
+    assert.match(source, /<BackButton/);
+  }
+  assert.match(stylesSource, /backArrow:\s*\{\s*width: 18,[\s\S]*?fontSize: 22/);
+  assert.match(settingsSource, /headerAction: \{ minWidth: 88, minHeight: 48/);
+  assert.match(reminderSource, /headerAction: \{ minWidth: 88, minHeight: 48/);
+  assert.match(reminderSource, /headerActionRight: \{ minWidth: 88, minHeight: 48/);
   assert.match(formattingToolbarSource, /button:\s*\{\s*minWidth: 48,\s*minHeight: 48/);
   assert.match(formattingToolbarSource, /actionOption:\s*\{\s*minHeight: 44/);
   assert.match(stylesSource, /documentInsertButton:\s*\{\s*minHeight: 44/);
