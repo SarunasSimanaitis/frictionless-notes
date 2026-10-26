@@ -25,6 +25,7 @@ import { TextDocumentEditor } from '../editor/DocumentEditor';
 import { ChecklistEditor } from '../lists/ChecklistEditor';
 import { palette } from '../theme';
 import { styles } from '../styles';
+import { BackButton } from '../BackButton';
 import { noteTypeLabels } from '../noteLabels';
 import type { NotificationPermission } from '../notifications';
 import type { AppPreferences, Note, NoteBlock, Reminder } from '../types';
@@ -221,10 +222,12 @@ export function NoteEditorScreen({
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
         <View style={styles.editorHeader}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to notes" onPress={() => void leaveEditor()} style={styles.headerAction}>
-            <Text style={styles.backArrow}>‹</Text>
-            <Text style={styles.headerActionText}>Notes</Text>
-          </Pressable>
+          <BackButton
+            label="Notes"
+            accessibilityLabel="Back to notes"
+            onPress={() => void leaveEditor()}
+            style={styles.headerAction}
+          />
           <Text style={styles.saveState}>{saving ? 'Saving…' : saveFailed ? 'Not saved' : 'Saved'}</Text>
           <Pressable
             accessibilityRole="button"
