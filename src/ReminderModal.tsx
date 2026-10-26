@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   reminderStatus: { color: palette.accent, fontSize: 11, fontWeight: '700', marginTop: 6 },
   disabledStatus: { color: palette.muted },
   reminderActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 5 },
-  reminderAction: { minWidth: 62, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  reminderAction: { minWidth: 62, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   reminderActionText: { color: palette.accent, fontSize: 13, fontWeight: '700' },
   deleteActionText: { color: palette.danger, fontSize: 13, fontWeight: '600' },
   emptyState: { alignItems: 'center', paddingHorizontal: 18 },
