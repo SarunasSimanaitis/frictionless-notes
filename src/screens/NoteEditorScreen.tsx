@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { EditorBridge } from '@10play/tentap-editor';
@@ -62,7 +63,7 @@ export function NoteEditorScreen({
   }), []);
   const noteRef = useRef(initialNote);
   const appState = useRef(AppState.currentState);
-  const bodyRef = useRef<TextInput>(null);
+  const bodyRef = useRef<TextInputInstance>(null);
   const firstRichEditorRef = useRef<EditorBridge | null>(null);
   const persistCurrent = useCallback(async () => {
     if (saveTimer.current) {

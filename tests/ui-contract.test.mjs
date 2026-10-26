@@ -114,7 +114,7 @@ test('ordinary notes insert a checklist at the focused cursor and retain text as
 
 test('Custom Notes use a custom TenTap bundle for rich text and keep style and image assets in structured local storage', () => {
   assert.equal(packageJson.dependencies['@10play/tentap-editor'], '^1.1.0');
-  assert.equal(packageJson.dependencies['react-native-webview'], '13.16.1');
+  assert.equal(packageJson.dependencies['react-native-webview'], '14.0.1');
   assert.match(documentEditorSource, /import \{[\s\S]*RichText, useBridgeState, useEditorBridge,[\s\S]*\} from '@10play\/tentap-editor'/);
   assert.match(textDocumentSource, /isCustom \? \([\s\S]*?<RichParagraphEditor/);
   assert.match(textDocumentSource, /<FormattingToolbar/);

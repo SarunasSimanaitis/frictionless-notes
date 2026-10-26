@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert, Keyboard, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Keyboard, Pressable, Text, TextInput, View, type TextInputInstance } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import type { FlatList as GestureHandlerFlatList } from 'react-native-gesture-handler';
 import type { NotesRepository } from '../repository';
@@ -29,7 +29,7 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [adding, setAdding] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const listRef = useRef<GestureHandlerFlatList<ChecklistItem>>(null);
   const addingRef = useRef(false);
   const toggleLocks = useRef(new Set<string>());

@@ -1,9 +1,9 @@
 import {
-  Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputInstance, type ViewStyle,
 } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { RichText, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge } from '@10play/tentap-editor';
+import { RichText, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
 import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
 import { NoteFontFormattingBridge } from './fontFormattingBridge';
 import { editorHtml } from '../../editor-web/build/editorHtml';
@@ -20,9 +20,16 @@ import type {
 } from '../types';
 import { customNoteCss } from './customNoteCss';
 
+type ShallowEditorThemeOptions = Omit<EditorBridgeOptions, 'theme'> & {
+  theme?: { webview?: StyleProp<ViewStyle>; webviewContainer?: StyleProp<ViewStyle> };
+};
+
+// TenTap's recursive theme type expands React Native 0.88's StyleProp until TypeScript hits its depth limit.
+const useEditorBridgeWithTheme = useEditorBridge as unknown as (options?: ShallowEditorThemeOptions) => EditorBridge;
+
 export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEditorRef, onBlocksChange, onBlocksCommit, onAppearanceChange }: {
   note: Note;
-  firstParagraphInputRef: MutableRefObject<TextInput | null>;
+  firstParagraphInputRef: MutableRefObject<TextInputInstance | null>;
   firstRichEditorRef: MutableRefObject<EditorBridge | null>;
   onBlocksChange: (blocks: NoteBlock[]) => void;
   onBlocksCommit: (blocks: NoteBlock[], obsoleteImageUris?: string[]) => Promise<boolean>;
@@ -32,7 +39,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   const [pageStyleOpen, setPageStyleOpen] = useState(false);
   const [activeRichEditor, setActiveRichEditor] = useState<ActiveRichEditor | null>(null);
   const activeRichEditorRef = useRef<ActiveRichEditor | null>(null);
-  const paragraphRefs = useRef(new Map<string, TextInput>());
+  const paragraphRefs = useRef(new Map<string, TextInputInstance>());
   const selections = useRef(new Map<string, { start: number; end: number }>());
   const focusedBlockId = useRef<string | null>(null);
   const focusAfterInsert = useRef<string | null>(null);
@@ -287,7 +294,11 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
   onChange: (html: string, text: string) => void;
 }) {
   const backgroundColor = noteBackgroundColors[appearance.background];
-  const editor = useEditorBridge({
+  const editorTheme = {
+    webview: { backgroundColor },
+    webviewContainer: { backgroundColor },
+  };
+  const editor = useEditorBridgeWithTheme({
     initialContent: block.richHtml ?? textAsHtml(block.text),
     customSource: editorHtml,
     bridgeExtensions: [NoteFontFormattingBridge],
@@ -295,10 +306,7 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
     avoidKeyboard: true,
     dynamicHeight: true,
     scrollBottomOffset: 18,
-    theme: {
-      webview: { backgroundColor },
-      webviewContainer: { backgroundColor },
-    },
+    theme: editorTheme,
   });
   const editorState = useBridgeState(editor);
   const html = useEditorContent(editor, { type: 'html', debounceInterval: 220 });

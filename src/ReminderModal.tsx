@@ -5,6 +5,7 @@ import {
   Switch, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackButton } from './BackButton';
 import type { NotesRepository } from './repository';
 import { createReminder, dateAtTime, nextAfterWorkDate, selectPrimaryNoteReminder } from './model';
 import { cancelReminderNotifications, checkNotificationPermission, requestNotificationPermission, syncReminderNotification } from './notifications';

@@ -4,14 +4,14 @@ An offline-first notes app for Android and iPhone, with Quick Notes, formatted C
 
 ## Run it on Android
 
-The Custom Note editor uses TenTap's advanced custom editor bundle. That setup requires a development build, so Expo Go is not the supported runtime for this editor. See [TenTap advanced setup](https://10play.github.io/10tap-editor/docs/setup/advancedSetup) and [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/).
+The Custom Note editor uses TenTap Advanced Setup. SDK 58 now matches your installed Expo Go version, but TenTap requires a development client for this advanced editor setup. Use Expo Go only for basic experiments; use the development build for the complete app. See [TenTap setup](https://github.com/10play/10tap-editor#expo) and [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/).
 
 1. Install Node.js 22.13 or newer, Android Studio/Android SDK, and enable USB debugging on a physical phone (or start an Android emulator).
 2. From this folder, run `npm install`. The postinstall script applies the version-checked DraggableFlatList compatibility patch and builds the custom TenTap editor bundle.
 3. Build and install the development client with `npx expo run:android`.
 4. Start Metro with `npx expo start --dev-client`, then open the installed development build on the phone or emulator.
 
-Use a development build from EAS if you do not have the Android SDK locally. The app uses Expo SDK 57. Local reminders remain on-device; exact alert delivery depends on system permissions and battery policies.
+If you do not have the Android SDK locally, build a development APK with `npx eas-cli build --platform android --profile development`. The app uses Expo SDK 58 (React Native 0.88 and React 19.3). Local reminders remain on-device; exact alert delivery depends on system permissions and battery policies.
 
 ## Installable Android APK
 

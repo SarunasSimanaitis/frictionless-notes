@@ -119,7 +119,7 @@ export function HomeScreen({
           renderItem={renderNote}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={filteredNotes.length ? styles.noteList : styles.emptyList}
-          ListHeaderComponent={filteredNotes.length ? <Text style={styles.listHeading}>RECENT</Text> : null}
+          ListHeaderComponent={filteredNotes.length ? <Text style={styles.listHeading}>RECENT</Text> : undefined}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <View style={styles.emptyMark}><Text style={styles.emptyMarkText}>✳</Text></View>
