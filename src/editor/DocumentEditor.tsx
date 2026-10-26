@@ -479,6 +479,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_event, gesture) => !busy && Math.hypot(gesture.dx, gesture.dy) > 3,
     onPanResponderGrant: () => { dragOrigin.current = offsetRef.current; },
+    onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_event, gesture) => {
       const next = clampOffset(
         dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
