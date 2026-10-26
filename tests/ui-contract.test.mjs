@@ -135,6 +135,9 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
   assert.match(textDocumentSource, /Make image smaller/);
   assert.match(textDocumentSource, /Make image larger/);
+  assert.match(textDocumentSource, /accessibilityLabel="Move image left"/);
+  assert.match(textDocumentSource, /inlineImageMoveGlyph/);
+  assert.match(textDocumentSource, /imageScale >= 1\.5/);
   assert.match(textDocumentSource, /PanResponder\.create/);
   assert.match(textDocumentSource, /offsetX: next\.x, offsetY: next\.y/);
   assert.match(textDocumentSource, /accessibilityLabel="Drag to reposition this image"/);
