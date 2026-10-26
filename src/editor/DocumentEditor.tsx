@@ -1,8 +1,8 @@
 import {
-  Alert, Image, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer, type RenderItemParams } from 'react-native-draggable-flatlist';
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { RichText, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge } from '@10play/tentap-editor';
 import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
 import { NoteFontFormattingBridge } from './fontFormattingBridge';
@@ -439,13 +439,68 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
   const [busy, setBusy] = useState(false);
   const [imageUnavailable, setImageUnavailable] = useState(false);
   const imageAspect = image.width / image.height;
-  const imageScale = Math.max(0.25, Math.min(1, image.scale ?? 1));
+  const imageScale = Math.max(0.2, Math.min(1.5, image.scale ?? 1));
   const requestedWidth = availableWidth * imageScale;
   const imageHeight = Math.min(requestedWidth / imageAspect, 480);
   const imageWidth = imageHeight * imageAspect;
+  const [offset, setOffset] = useState({ x: image.offsetX ?? 0, y: image.offsetY ?? 0 });
+  const offsetRef = useRef(offset);
+  const dragOrigin = useRef(offset);
+  const clampOffset = (x: number, y: number) => ({
+    x: Math.max(-0.5, Math.min(0.5, x)),
+    y: Math.max(-1, Math.min(1, y)),
+  });
+  useEffect(() => {
+    const savedOffset = clampOffset(image.offsetX ?? 0, image.offsetY ?? 0);
+    offsetRef.current = savedOffset;
+    setOffset(savedOffset);
+  }, [image.offsetX, image.offsetY]);
+
+  const commitOffset = useCallback(async (x: number, y: number) => {
+    const previous = dragOrigin.current;
+    const next = clampOffset(x, y);
+    offsetRef.current = next;
+    setOffset(next);
+    setBusy(true);
+    try {
+      const saved = await onBlocksCommit(blocks.map((block) => block.id === image.id && block.type === 'image'
+        ? { ...block, offsetX: next.x, offsetY: next.y }
+        : block));
+      if (!saved) throw new Error('Image position was not saved.');
+    } catch {
+      offsetRef.current = previous;
+      setOffset(previous);
+      Alert.alert('Could not move image', 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }, [blocks, image.id, onBlocksCommit]);
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_event, gesture) => !busy && Math.hypot(gesture.dx, gesture.dy) > 3,
+    onPanResponderGrant: () => { dragOrigin.current = offsetRef.current; },
+    onPanResponderMove: (_event, gesture) => {
+      const next = clampOffset(
+        dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
+        dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
+      );
+      offsetRef.current = next;
+      setOffset(next);
+    },
+    onPanResponderRelease: (_event, gesture) => {
+      void commitOffset(
+        dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
+        dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
+      );
+    },
+    onPanResponderTerminate: () => {
+      offsetRef.current = dragOrigin.current;
+      setOffset(dragOrigin.current);
+    },
+  }), [availableWidth, busy, commitOffset]);
 
   const changeScale = async (delta: number) => {
-    const nextScale = Math.round(Math.max(0.25, Math.min(1, imageScale + delta)) * 100) / 100;
+    const nextScale = Math.round(Math.max(0.2, Math.min(1.5, imageScale + delta)) * 100) / 100;
     if (nextScale === imageScale || busy) return;
     setBusy(true);
     try {
@@ -493,7 +548,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
           accessible
           accessibilityRole="text"
           accessibilityLabel="Image unavailable on this device. Replace or remove it."
-          style={[styles.inlineImageUnavailable, { width: imageWidth, height: imageHeight }]}
+          style={[styles.inlineImageUnavailable, { width: imageWidth, height: imageHeight, transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }]}
         >
           <Text style={styles.inlineImageUnavailableText}>Image unavailable on this device</Text>
         </View>
@@ -503,10 +558,13 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
           source={{ uri: image.uri }}
           resizeMode="contain"
           onError={() => setImageUnavailable(true)}
-          style={{ width: imageWidth, height: imageHeight, alignSelf: 'center' }}
+          style={{ width: imageWidth, height: imageHeight, alignSelf: 'center', transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }}
         />
       )}
       <View style={styles.inlineImageActions}>
+        <View {...panResponder.panHandlers}>
+          <Text style={styles.inlineImageDragHandle}>↕ Move</Text>
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Make image smaller"
