@@ -50,6 +50,10 @@ export interface InlineImageBlock {
   width: number;
   height: number;
   scale?: number;
+  /** Horizontal image offset as a fraction of the note content width. */
+  offsetX?: number;
+  /** Vertical image offset as a fraction of the note content width. */
+  offsetY?: number;
 }
 
 export type NoteBlock = ParagraphBlock | EmbeddedChecklistBlock | InlineImageBlock;
