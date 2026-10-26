@@ -412,8 +412,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   button: {
-    minWidth: 40,
-    minHeight: 40,
+    minWidth: 48,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 11,
@@ -511,8 +511,8 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   sizeOption: {
-    minWidth: 39,
-    minHeight: 40,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   },
   customSizeInput: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: 11,
     borderWidth: 1,
     borderColor: palette.line,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   },
   applySizeButton: {
     minWidth: 64,
-    minHeight: 40,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   },
   toggleOption: {
     minWidth: 56,
-    minHeight: 34,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionOption: {
-    minHeight: 36,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 11,
