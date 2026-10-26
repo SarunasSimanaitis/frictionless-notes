@@ -137,7 +137,7 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(textDocumentSource, /Make image smaller/);
   assert.match(textDocumentSource, /Make image larger/);
   assert.doesNotMatch(textDocumentSource, /inlineImageMoveControls|inlineImageMoveGlyph/);
-  assert.match(backButtonSource, /styles\.backArrow/);
+  assert.match(backButtonSource, /appStyles\.backArrow/);
   for (const source of [noteEditorSource, settingsSource, reminderSource]) {
     assert.match(source, /<BackButton/);
   }
