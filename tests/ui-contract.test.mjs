@@ -33,6 +33,8 @@ const imageStorageSource = readFileSync(new URL('../src/noteImages.ts', import.m
 const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingToolbar.tsx', import.meta.url), 'utf8');
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
 const editorViteConfigSource = readFileSync(new URL('../editor-web/vite.config.ts', import.meta.url), 'utf8');
+const draggableFlatListSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx', import.meta.url), 'utf8');
+const nestableDraggableFlatListSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx', import.meta.url), 'utf8');
 
 test('the checklist input stays in a keyboard-aware flex layout below its independently scrolling list', () => {
   assert.equal(appConfig.expo.android.softwareKeyboardLayoutMode, 'resize');
@@ -206,6 +208,12 @@ test('Expo Go Android topic-push import resolves through the optional-module shi
   assert.doesNotMatch(notificationSource, /subscribeToTopicAsync|unsubscribeFromTopicAsync/);
 });
 
+test('draggable lists use Reanimated 4 dependencies and React Native 0.88 measurement APIs', () => {
+  assert.match(draggableFlatListSource, /const scrollHandler = useAnimatedScrollHandler\([\s\S]*?\n\s*\}\n\s*\);/);
+  assert.doesNotMatch(draggableFlatListSource, /useAnimatedScrollHandler\([\s\S]*?\[horizontalAnim\]\s*\)/);
+  assert.doesNotMatch(nestableDraggableFlatListSource, /findNodeHandle/);
+  assert.match(nestableDraggableFlatListSource, /containerRef\.current\.measureLayout\(relativeTo, onSuccess, onFail\)/);
+});
 test('checklist rows support long-press drag reordering and preserve the active placeholder', () => {
   assert.match(checklistEditorSource, /<DraggableFlatList[\s\S]*?data=\{note\.items\}/);
   assert.match(checklistEditorSource, /keyExtractor=\{\(item\) => item\.id\}/);

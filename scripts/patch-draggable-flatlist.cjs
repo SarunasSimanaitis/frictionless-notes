@@ -10,45 +10,81 @@ const packageJson = JSON.parse(
 
 if (packageJson.version !== '4.0.3') {
   throw new Error(
-    `Expected react-native-draggable-flatlist 4.0.3, found ${packageJson.version}. Recheck the InteractionManager patch before upgrading this dependency.`,
+    `Expected react-native-draggable-flatlist 4.0.3, found ${packageJson.version}. Recheck the compatibility patches before upgrading this dependency.`,
   );
 }
 
-const sourcePath = path.join(
-  packageDirectory,
-  'src/components/DraggableFlatList.tsx',
-);
-const originalImport = '  InteractionManager,\n';
-const patchedCall = `    requestIdleCallback(() => {
-      reset();
-    });`;
-const originalCall = `    InteractionManager.runAfterInteractions(() => {
-      reset();
-    });`;
-let source = fs.readFileSync(sourcePath, 'utf8');
+function patchSource(relativePath, patches) {
+  const sourcePath = path.join(packageDirectory, relativePath);
+  let source = fs.readFileSync(sourcePath, 'utf8');
+  let changed = false;
 
-if (!source.includes('InteractionManager')) {
-  if (source.includes(patchedCall)) {
-    process.stdout.write(
-      'react-native-draggable-flatlist already uses requestIdleCallback.\n',
+  for (const { description, original, replacement } of patches) {
+    if (source.includes(original)) {
+      source = source.replace(original, replacement);
+      changed = true;
+      continue;
+    }
+
+    if (!replacement || source.includes(replacement)) continue;
+
+    throw new Error(
+      `Could not find the expected ${description} in react-native-draggable-flatlist 4.0.3.`,
     );
-    process.exit(0);
   }
 
-  throw new Error(
-    'react-native-draggable-flatlist 4.0.3 changed unexpectedly; review its scheduling code before continuing.',
-  );
+  if (changed) fs.writeFileSync(sourcePath, source);
 }
 
-if (!source.includes(originalImport) || !source.includes(originalCall)) {
-  throw new Error(
-    'Could not find the expected InteractionManager import and call in react-native-draggable-flatlist 4.0.3.',
-  );
-}
+patchSource('src/components/DraggableFlatList.tsx', [
+  {
+    description: 'InteractionManager import',
+    original: '  InteractionManager,\n',
+    replacement: '',
+  },
+  {
+    description: 'InteractionManager reset scheduling',
+    original: `    InteractionManager.runAfterInteractions(() => {
+      reset();
+    });`,
+    replacement: `    requestIdleCallback(() => {
+      reset();
+    });`,
+  },
+  {
+    description: 'legacy Reanimated scroll-handler dependencies',
+    original: `    },
+    [horizontalAnim]
+  );`,
+    replacement: `    }
+  );`,
+  },
+]);
 
-source = source.replace(originalImport, '');
-source = source.replace(originalCall, patchedCall);
-fs.writeFileSync(sourcePath, source);
+patchSource('src/components/NestableDraggableFlatList.tsx', [
+  {
+    description: 'findNodeHandle import',
+    original: 'import { findNodeHandle, LogBox } from "react-native";',
+    replacement: 'import { LogBox } from "react-native";',
+  },
+  {
+    description: 'nested-list layout measurement',
+    original: `    const nodeHandle = findNodeHandle(scrollableRef.current);
+
+    const onSuccess = (_x: number, y: number) => {`,
+    replacement: `    const relativeTo = scrollableRef.current;
+    if (!containerRef.current || !relativeTo) return;
+
+    const onSuccess = (_x: number, y: number) => {`,
+  },
+  {
+    description: 'nested-list measureLayout target',
+    original: `    //@ts-ignore
+    containerRef.current.measureLayout(nodeHandle, onSuccess, onFail);`,
+    replacement: `    containerRef.current.measureLayout(relativeTo, onSuccess, onFail);`,
+  },
+]);
+
 process.stdout.write(
-  'Patched react-native-draggable-flatlist 4.0.3 to use requestIdleCallback.\n',
+  'Patched react-native-draggable-flatlist 4.0.3 for React Native 0.88 and Reanimated 4.\n',
 );
