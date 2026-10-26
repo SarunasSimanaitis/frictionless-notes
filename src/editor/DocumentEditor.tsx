@@ -562,9 +562,14 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
         />
       )}
       <View style={styles.inlineImageActions}>
-        <View {...panResponder.panHandlers}>
-          <Text style={styles.inlineImageDragHandle}>↕ Move</Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Drag to reposition this image"
+          {...panResponder.panHandlers}
+          style={styles.inlineImageDragHandle}
+        >
+          <Text style={styles.inlineImageDragHandleText}>↕ Drag</Text>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Make image smaller"
