@@ -361,7 +361,7 @@ export const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   documentInsertButton: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -421,7 +421,7 @@ export const styles = StyleSheet.create({
   },
   richColorOption: {
     minWidth: 52,
-    minHeight: 38,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
@@ -444,7 +444,7 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   richAlignmentOption: {
-    minHeight: 38,
+    minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderWidth: 1,
