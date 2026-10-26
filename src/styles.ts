@@ -565,10 +565,20 @@ export const styles = StyleSheet.create({
   },
   inlineImageActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.line,
     marginTop: 8,
+  },
+  inlineImageDragHandle: {
+    minWidth: 76,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: palette.accent,
+    fontSize: 13,
+    fontWeight: '700',
   },
   inlineImageAction: {
     minWidth: 76,
