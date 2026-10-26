@@ -500,13 +500,6 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
     },
   }), [availableWidth, busy, commitOffset]);
 
-  const moveImage = (deltaX: number, deltaY: number) => {
-    if (busy) return;
-    const current = offsetRef.current;
-    dragOrigin.current = current;
-    void commitOffset(current.x + deltaX, current.y + deltaY);
-  };
-
   const changeScale = async (delta: number) => {
     const nextScale = Math.round(Math.max(0.2, Math.min(1.5, imageScale + delta)) * 100) / 100;
     if (nextScale === imageScale || busy) return;
@@ -570,20 +563,6 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
         />
       )}
       <View style={styles.inlineImageActions}>
-        <View style={styles.inlineImageMoveControls}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Move image left" disabled={busy} onPress={() => moveImage(-0.08, 0)} style={styles.inlineImageMoveButton}>
-            <Text style={styles.inlineImageMoveGlyph}>←</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Move image up" disabled={busy} onPress={() => moveImage(0, -0.08)} style={styles.inlineImageMoveButton}>
-            <Text style={styles.inlineImageMoveGlyph}>↑</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Move image down" disabled={busy} onPress={() => moveImage(0, 0.08)} style={styles.inlineImageMoveButton}>
-            <Text style={styles.inlineImageMoveGlyph}>↓</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Move image right" disabled={busy} onPress={() => moveImage(0.08, 0)} style={styles.inlineImageMoveButton}>
-            <Text style={styles.inlineImageMoveGlyph}>→</Text>
-          </Pressable>
-        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Drag to reposition this image"
