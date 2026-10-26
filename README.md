@@ -13,6 +13,19 @@ The Custom Note editor uses TenTap's advanced custom editor bundle. That setup r
 
 Use a development build from EAS if you do not have the Android SDK locally. The app uses Expo SDK 57. Local reminders remain on-device; exact alert delivery depends on system permissions and battery policies.
 
+## Installable Android APK
+
+An internal APK profile is defined in `eas.json`. From the project folder:
+
+```sh
+npm install
+npx eas-cli login
+npx eas-cli build:configure
+npx eas-cli build --platform android --profile preview
+```
+
+On first setup, EAS may ask you to create an Expo project and an Android signing keystore. Choose the existing Expo project if one has already been linked; otherwise create one under your Expo account and keep the generated keystore on EAS. When the build completes, open the install URL from the EAS build page on your Android phone and approve installation from that source. The preview profile produces an APK for direct installation; the production profile keeps the default Play Store app bundle format.
+
 ## Features
 
 - Notes, checklists, shopping lists, reminders, preferences, and photo copies are stored locally in SQLite or the app's documents directory.
