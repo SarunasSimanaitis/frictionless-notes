@@ -576,6 +576,10 @@ export const styles = StyleSheet.create({
     minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: palette.accentSoft,
+  },
+  inlineImageDragHandleText: {
     color: palette.accent,
     fontSize: 13,
     fontWeight: '700',
