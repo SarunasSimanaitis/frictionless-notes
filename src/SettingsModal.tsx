@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   permissionCard: { padding: 15, marginTop: 12, borderRadius: 15, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
   permissionTitle: { color: palette.ink, fontSize: 14, fontWeight: '600' },
   permissionDescription: { color: palette.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
-  systemSettingsButton: { alignSelf: 'flex-start', marginTop: 12, paddingVertical: 8, paddingHorizontal: 11, borderRadius: 11, backgroundColor: palette.accentSoft },
+  systemSettingsButton: { alignSelf: 'flex-start', minHeight: 48, marginTop: 12, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
   systemSettingsText: { color: palette.accent, fontSize: 13, fontWeight: '700' },
   sectionRule: { height: StyleSheet.hairlineWidth, backgroundColor: palette.line, marginTop: 24, marginBottom: 24 },
   timeButton: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, marginTop: 12, borderRadius: 14, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
