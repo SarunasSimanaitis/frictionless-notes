@@ -32,7 +32,7 @@ On first setup, EAS may ask you to create an Expo project and an Android signing
 - Checklist entry stays in the editor's flex layout while the list scrolls independently. `KeyboardAvoidingView` applies bottom padding on Android and iOS; the Android app config also requests `resize` for native builds.
 - Add list entries with the keyboard Done action or the Add button while keeping the keyboard open. Tap an item to check it off, edit its text, or hold it for about 700 ms to reorder. Screen readers can move items up and down.
 - Plain text notes can include embedded checklists between paragraphs. In Custom Notes, the compact toolbar supports font family and size, bold, italic, underline, text and highlight colors, headings, lists, alignment, and paragraph spacing. The toolbar stays above the document and away from the keyboard.
-- Custom Notes include blank, plan, and journal starters; six backgrounds; plain, lined, dotted, or grid paper; three margins; and offline inline photos that can be resized, replaced, or removed.
+- Custom Notes include blank, plan, and journal starters; six backgrounds; plain, lined, dotted, or grid paper; three margins; and offline inline photos that can be dragged, repositioned, resized, replaced, or removed.
 - Existing plain text notes remain readable. Additive `editor_mode`, `blocks_json`, and `appearance_json` columns store editor mode, document blocks, and page style without resetting the SQLite database.
 - Reminder times use the device's local time zone. “After work” defaults to 17:30 and is configurable. Android settings report app permission separately from a blocked Reminders notification channel.
 
