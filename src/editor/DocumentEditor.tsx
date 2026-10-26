@@ -565,6 +565,21 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Drag to reposition this image"
+          accessibilityActions={[
+            { name: 'moveLeft', label: 'Move image left' },
+            { name: 'moveRight', label: 'Move image right' },
+            { name: 'moveUp', label: 'Move image up' },
+            { name: 'moveDown', label: 'Move image down' },
+          ]}
+          onAccessibilityAction={({ nativeEvent }) => {
+            const current = offsetRef.current;
+            dragOrigin.current = current;
+            const step = 0.08;
+            void commitOffset(
+              current.x + (nativeEvent.actionName === 'moveRight' ? step : nativeEvent.actionName === 'moveLeft' ? -step : 0),
+              current.y + (nativeEvent.actionName === 'moveDown' ? step : nativeEvent.actionName === 'moveUp' ? -step : 0),
+            );
+          }}
           {...panResponder.panHandlers}
           style={styles.inlineImageDragHandle}
         >
