@@ -285,13 +285,12 @@ export function ReminderModal({
     <Modal visible={visible} animationType="slide" onRequestClose={creating ? closeComposer : onClose}>
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
+          <BackButton
+            label={creating ? 'Reminders' : 'Note'}
+            accessibilityLabel={creating ? 'Back to reminders' : 'Back to note'}
             onPress={creating ? closeComposer : onClose}
             style={styles.headerAction}
-          >
-            <Text style={styles.headerActionText}>‹ {creating ? 'Reminders' : 'Note'}</Text>
-          </Pressable>
+          />
           <Text style={styles.headerTitle}>{creating ? 'Reminder' : 'Reminders'}</Text>
           {creating ? (
             <Pressable accessibilityRole="button" onPress={saveFromComposer} disabled={busy} style={styles.headerActionRight}>
@@ -458,8 +457,8 @@ function PresetButton({ title, onPress, wide = false }: { title: string; onPress
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { minHeight: 58, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerAction: { minWidth: 85, minHeight: 48, justifyContent: 'center' },
-  headerActionRight: { minWidth: 70, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
+  headerAction: { minWidth: 88, minHeight: 48, flexDirection: 'row', alignItems: 'center' },
+  headerActionRight: { minWidth: 88, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
   headerActionText: { color: palette.accent, fontSize: 15, fontWeight: '700' },
   headerTitle: { color: palette.ink, fontSize: 18, fontWeight: '700' },
   manager: { flex: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 18 },
