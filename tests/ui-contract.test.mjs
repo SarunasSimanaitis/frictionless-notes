@@ -140,6 +140,8 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(formattingToolbarSource, /button:\s*\{\s*minWidth: 48,\s*minHeight: 48/);
   assert.match(formattingToolbarSource, /actionOption:\s*\{\s*minHeight: 44/);
   assert.match(stylesSource, /documentInsertButton:\s*\{\s*minHeight: 44/);
+  assert.match(reminderSource, /reminderAction: \{ minWidth: 62, minHeight: 48/);
+  assert.match(settingsSource, /systemSettingsButton: \{ alignSelf: 'flex-start', minHeight: 48/);
   assert.match(textDocumentSource, /imageScale >= 1\.5/);
   assert.match(textDocumentSource, /PanResponder\.create/);
   assert.match(textDocumentSource, /offsetX: next\.x, offsetY: next\.y/);
