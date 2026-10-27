@@ -9,6 +9,7 @@ export const databaseSchema = `
     body TEXT NOT NULL DEFAULT '',
     blocks_json TEXT,
     appearance_json TEXT,
+    deleted_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -57,4 +58,8 @@ export async function runDatabaseMigrations(database: SchemaDatabase): Promise<v
   if (!noteColumns.some((column) => column.name === 'appearance_json')) {
     await database.execAsync('ALTER TABLE notes ADD COLUMN appearance_json TEXT');
   }
+  if (!noteColumns.some((column) => column.name === 'deleted_at')) {
+    await database.execAsync('ALTER TABLE notes ADD COLUMN deleted_at INTEGER');
+  }
+  await database.execAsync('CREATE INDEX IF NOT EXISTS notes_deleted_at_idx ON notes(deleted_at)');
 }

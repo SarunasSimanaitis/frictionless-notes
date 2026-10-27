@@ -4,6 +4,9 @@ import type {
   Reminder, StoredNoteType, NoteAppearance, NoteBackground, PaperStyle, NoteMargin, ParagraphSpacing,
 } from './types';
 
+export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export const defaultNoteAppearance: NoteAppearance = {
   background: 'warmWhite',
   paper: 'plain',
@@ -68,6 +71,7 @@ export function createNote(
     appearance: { ...defaultNoteAppearance },
     createdAt: now,
     updatedAt: now,
+    deletedAt: null,
     items: [],
   };
 }
@@ -452,6 +456,15 @@ export function updateNoteDraft(
     return { ...note, ...changes, blocks, updatedAt };
   }
   return { ...note, ...changes, updatedAt };
+}
+
+export function isTrashExpired(note: Pick<Note, 'deletedAt'>, now = Date.now()): boolean {
+  return note.deletedAt !== null && Number.isFinite(note.deletedAt) &&
+    note.deletedAt <= now - TRASH_RETENTION_MS;
+}
+
+export function trashDaysRemaining(deletedAt: number, now = Date.now()): number {
+  return Math.max(0, Math.ceil((deletedAt + TRASH_RETENTION_MS - now) / MS_PER_DAY));
 }
 
 export function sortNotes(notes: Note[]): Note[] {

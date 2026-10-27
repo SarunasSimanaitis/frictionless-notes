@@ -3,7 +3,7 @@ import {
 } from 'react-native';
 import { NestableDraggableFlatList, NestableScrollContainer, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { RichText, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
+import { RichText, TenTapStartKit, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
 import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
 import { NoteFontFormattingBridge } from './fontFormattingBridge';
 import { editorHtml } from '../../editor-web/build/editorHtml';
@@ -301,7 +301,7 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
   const editor = useEditorBridgeWithTheme({
     initialContent: block.richHtml ?? textAsHtml(block.text),
     customSource: editorHtml,
-    bridgeExtensions: [NoteFontFormattingBridge],
+    bridgeExtensions: [...TenTapStartKit, NoteFontFormattingBridge],
     autofocus: false,
     avoidKeyboard: true,
     dynamicHeight: true,

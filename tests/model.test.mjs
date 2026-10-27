@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createNote,
+  isTrashExpired,
+  trashDaysRemaining,
+  TRASH_RETENTION_MS,
   createChecklistItem,
   createEmbeddedChecklistItem,
   createReminder,
@@ -355,6 +358,15 @@ test('notes sort newest first and search matches titles, body, and item text', (
   assert.deepEqual(searchNotes([older, newer], 'READ').map((note) => note.id), ['older']);
 });
 
+test('trash notes expire at 30 days and show an accurate remaining lifetime', () => {
+  const now = 100 * 24 * 60 * 60 * 1000;
+  assert.equal(isTrashExpired({ deletedAt: now - TRASH_RETENTION_MS + 1 }, now), false);
+  assert.equal(isTrashExpired({ deletedAt: now - TRASH_RETENTION_MS }, now), true);
+  assert.equal(isTrashExpired({ deletedAt: null }, now), false);
+  assert.equal(trashDaysRemaining(now, now), 30);
+  assert.equal(trashDaysRemaining(now, now + 29 * 24 * 60 * 60 * 1000), 1);
+  assert.equal(trashDaysRemaining(now, now + 30 * 24 * 60 * 60 * 1000), 0);
+});
 test('cursor selections stay within content and resolve empty content to offset zero', () => {
   assert.equal(selectionForDocument('', 100), 0);
   assert.equal(selectionForDocument('hello', 20), 5);
@@ -430,6 +442,7 @@ test('the additive database upgrade keeps old notes and items and adds document 
     const migratedColumns = database.prepare('PRAGMA table_info(notes)').all().map((column) => column.name);
     assert.equal(migratedColumns.includes('blocks_json'), true);
     assert.equal(migratedColumns.includes('appearance_json'), true);
+    assert.equal(migratedColumns.includes('deleted_at'), true);
     assert.deepEqual(readNoteAppearance(database.prepare('SELECT appearance_json FROM notes WHERE id = ?').get('old-note').appearance_json), {
       background: 'warmWhite', paper: 'plain', margin: 'comfortable', font: 'sans',
     });

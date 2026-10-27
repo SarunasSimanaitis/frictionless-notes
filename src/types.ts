@@ -67,6 +67,7 @@ export interface Note {
   appearance: NoteAppearance;
   createdAt: number;
   updatedAt: number;
+  deletedAt: number | null;
   items: ChecklistItem[];
 }
 

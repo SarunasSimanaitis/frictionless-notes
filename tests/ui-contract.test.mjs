@@ -19,9 +19,8 @@ const reminderSource = readFileSync(new URL('../src/ReminderModal.tsx', import.m
 const notificationSource = readFileSync(new URL('../src/notifications.ts', import.meta.url), 'utf8');
 const databaseSource = readFileSync(new URL('../src/database.ts', import.meta.url), 'utf8');
 const schemaSource = readFileSync(new URL('../src/schema.ts', import.meta.url), 'utf8');
-const metroSource = readFileSync(new URL('../metro.config.js', import.meta.url), 'utf8');
+const metroSource = readFileSync(new URL('../metro.config.cjs', import.meta.url), 'utf8');
 const indexSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
-const logBoxSource = readFileSync(new URL('../src/logbox.ts', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../src/SettingsModal.tsx', import.meta.url), 'utf8');
 const reminderModalSource = readFileSync(new URL('../src/ReminderModal.tsx', import.meta.url), 'utf8');
 const topicShimSource = readFileSync(new URL('../src/shims/TopicSubscriptionModule.android.ts', import.meta.url), 'utf8');
@@ -34,6 +33,7 @@ const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingTo
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
 const editorViteConfigSource = readFileSync(new URL('../editor-web/vite.config.ts', import.meta.url), 'utf8');
 const draggableFlatListSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx', import.meta.url), 'utf8');
+const cellRendererSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/CellRendererComponent.tsx', import.meta.url), 'utf8');
 const nestableDraggableFlatListSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx', import.meta.url), 'utf8');
 
 test('the checklist input stays in a keyboard-aware flex layout below its independently scrolling list', () => {
@@ -117,7 +117,7 @@ test('ordinary notes insert a checklist at the focused cursor and retain text as
 test('Custom Notes use a custom TenTap bundle for rich text and keep style and image assets in structured local storage', () => {
   assert.equal(packageJson.dependencies['@10play/tentap-editor'], '^1.1.0');
   assert.equal(packageJson.dependencies['react-native-webview'], '14.0.1');
-  assert.match(documentEditorSource, /import \{[\s\S]*RichText, useBridgeState, useEditorBridge,[\s\S]*\} from '@10play\/tentap-editor'/);
+  assert.match(documentEditorSource, /import \{[\s\S]*RichText, TenTapStartKit, useBridgeState, useEditorBridge,[\s\S]*\} from '@10play\/tentap-editor'/);
   assert.match(textDocumentSource, /isCustom \? \([\s\S]*?<RichParagraphEditor/);
   assert.match(textDocumentSource, /<FormattingToolbar/);
   assert.match(textDocumentSource, /customSource: editorHtml/);
@@ -164,6 +164,7 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(textDocumentSource, /accessibilityLabel="Image unavailable on this device\. Replace or remove it\."/);
   assert.match(schemaSource, /appearance_json TEXT/);
   assert.match(schemaSource, /ALTER TABLE notes ADD COLUMN appearance_json TEXT/);
+  assert.match(schemaSource, /ALTER TABLE notes ADD COLUMN deleted_at INTEGER/);
   assert.match(databaseSource, /JSON\.stringify\(note\.appearance\)/);
   assert.match(imageStorageSource, /expo-file-system\/legacy/);
   assert.match(imageStorageSource, /FileSystem\.copyAsync\(\{ from: asset\.uri, to: uri \}\)/);
@@ -187,6 +188,7 @@ test('reminders are note-level, unique per note, and carry note context into not
   assert.match(reminderSource, /syncReminderNotification\(reminder, preferences\.remindersEnabled, true, note\?\.title\)/);
   assert.match(appSource, /useLastNotificationResponse\(\)/);
   assert.match(appSource, /setActiveNote\(target\)/);
+  assert.match(reminderSource, /label=\{creating \? 'Reminders' : 'Notes'\}/);
 });
 
 test('Android reminder-channel blocks are detected and explained separately from app permission', () => {
@@ -212,7 +214,10 @@ test('draggable lists use Reanimated 4 dependencies and React Native 0.88 measur
   assert.match(draggableFlatListSource, /const scrollHandler = useAnimatedScrollHandler\([\s\S]*?\n\s*\}\n\s*\);/);
   assert.doesNotMatch(draggableFlatListSource, /useAnimatedScrollHandler\([\s\S]*?\[horizontalAnim\]\s*\)/);
   assert.doesNotMatch(nestableDraggableFlatListSource, /findNodeHandle/);
-  assert.match(nestableDraggableFlatListSource, /containerRef\.current\.measureLayout\(relativeTo, onSuccess, onFail\)/);
+  assert.match(cellRendererSource, /if \(!isWeb\) return/);
+  assert.match(cellRendererSource, /updateCellMeasurements\(e\?\.nativeEvent\.layout\)/);
+  assert.doesNotMatch(nestableDraggableFlatListSource, /measureLayout|findNodeHandle|ignoreLogs|reportErrorsAsExceptions/);
+  assert.match(nestableDraggableFlatListSource, /listVerticalOffset\.value = layout\.y/);
 });
 test('checklist rows support long-press drag reordering and preserve the active placeholder', () => {
   assert.match(checklistEditorSource, /<DraggableFlatList[\s\S]*?data=\{note\.items\}/);
@@ -223,12 +228,32 @@ test('checklist rows support long-press drag reordering and preserve the active 
   assert.match(checklistEditorSource, /autoscrollSpeed=\{72\}/);
   assert.match(checklistEditorSource, /renderPlaceholder=\{\(\{ item \}\) =>/);
   assert.match(checklistEditorSource, /checklistRowActive/);
-  assert.match(indexSource, /import '\.\/src\/logbox'/);
-  assert.match(logBoxSource, /expo-notifications.*functionality is not fully supported/);
+  assert.doesNotMatch(indexSource, /logbox/);
   assert.match(settingsSource, /SafeAreaView.*from 'react-native-safe-area-context'/);
   assert.doesNotMatch(settingsSource, /SafeAreaView.*from 'react-native'/);
 });
 
+test('deleted notes remain recoverable for 30 days and can be restored or permanently removed', () => {
+  assert.match(repositorySource, /loadTrashedNotes\(\)/);
+  assert.match(repositorySource, /moveNoteToTrash\(noteId: string, deletedAt: number\)/);
+  assert.match(repositorySource, /restoreNote\(noteId: string\)/);
+  assert.match(repositorySource, /permanentlyDeleteNote\(noteId: string\)/);
+  assert.match(databaseSource, /WHERE deleted_at IS \$\{trashed \? 'NOT NULL' : 'NULL'\}/);
+  assert.match(databaseSource, /UPDATE notes SET deleted_at = \?/);
+  assert.match(appSource, /TRASH_RETENTION_MS|isTrashExpired/);
+  assert.match(appSource, /removeNoteImages\(note\)/);
+  assert.match(homeScreenSource, /automatically deleted 30 days/);
+  assert.match(homeScreenSource, /Restore/);
+  assert.match(homeScreenSource, /Empty Trash/);
+  assert.match(homeScreenSource, /Delete permanently/);
+});
+
+test('reminder actions have clear, consistent labels on note and home screens', () => {
+  assert.match(homeScreenSource, /Manage reminders/);
+  assert.match(homeScreenSource, /<Text style=\{styles\.reminderHomeLabel\}>Reminders<\/Text>/);
+  assert.match(noteEditorSource, /<Text style=\{styles\.reminderHeaderText\}>Remind<\/Text>/);
+  assert.match(reminderSource, /accessibilityLabel=\{creating \? 'Back to reminders' : 'Back to notes'\}/);
+});
 test('all modal safe areas use react-native-safe-area-context', () => {
   assert.match(settingsSource, /SafeAreaView.*from 'react-native-safe-area-context'/);
   assert.match(reminderModalSource, /SafeAreaView.*from 'react-native-safe-area-context'/);

@@ -287,8 +287,8 @@ export function ReminderModal({
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
           <BackButton
-            label={creating ? 'Reminders' : 'Note'}
-            accessibilityLabel={creating ? 'Back to reminders' : 'Back to note'}
+            label={creating ? 'Reminders' : 'Notes'}
+            accessibilityLabel={creating ? 'Back to reminders' : 'Back to notes'}
             onPress={creating ? closeComposer : onClose}
             style={styles.headerAction}
           />

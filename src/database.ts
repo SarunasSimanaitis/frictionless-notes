@@ -14,6 +14,7 @@ interface NoteRow {
   body: string;
   blocks_json: string | null;
   appearance_json: string | null;
+  deleted_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -53,10 +54,11 @@ function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return databasePromise;
 }
 
-export async function loadNotes(): Promise<Note[]> {
+async function loadNotesByTrashState(trashed: boolean): Promise<Note[]> {
   const database = await getDatabase();
   const noteRows = await database.getAllAsync<NoteRow>(
-    'SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, created_at, updated_at FROM notes ORDER BY updated_at DESC',
+    `SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, deleted_at, created_at, updated_at
+     FROM notes WHERE deleted_at IS ${trashed ? 'NOT NULL' : 'NULL'} ORDER BY ${trashed ? 'deleted_at DESC' : 'updated_at DESC'}`,
   );
   const itemRows = await database.getAllAsync<ItemRow>(
     'SELECT id, note_id, text, checked, position FROM checklist_items ORDER BY position ASC',
@@ -86,9 +88,18 @@ export async function loadNotes(): Promise<Note[]> {
       appearance: readNoteAppearance(row.appearance_json),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
       items: itemsByNote.get(row.id) ?? [],
     };
   });
+}
+
+export function loadNotes(): Promise<Note[]> {
+  return loadNotesByTrashState(false);
+}
+
+export function loadTrashedNotes(): Promise<Note[]> {
+  return loadNotesByTrashState(true);
 }
 
 export async function insertNote(note: Note): Promise<void> {
@@ -124,7 +135,21 @@ export async function updateNote(note: Note): Promise<void> {
   );
 }
 
-export async function deleteNote(noteId: string): Promise<void> {
+export async function moveNoteToTrash(noteId: string, deletedAt: number): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(
+    'UPDATE notes SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL',
+    deletedAt,
+    noteId,
+  );
+}
+
+export async function restoreNote(noteId: string): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync('UPDATE notes SET deleted_at = NULL WHERE id = ?', noteId);
+}
+
+export async function permanentlyDeleteNote(noteId: string): Promise<void> {
   const database = await getDatabase();
   await database.runAsync('DELETE FROM notes WHERE id = ?', noteId);
 }

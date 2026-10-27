@@ -3,9 +3,12 @@ import type { NotesRepository } from './repository';
 
 export const localNotesRepository: NotesRepository = {
   loadNotes: database.loadNotes,
+  loadTrashedNotes: database.loadTrashedNotes,
   insertNote: database.insertNote,
   updateNote: database.updateNote,
-  deleteNote: database.deleteNote,
+  moveNoteToTrash: database.moveNoteToTrash,
+  restoreNote: database.restoreNote,
+  permanentlyDeleteNote: database.permanentlyDeleteNote,
   addChecklistItem: database.addChecklistItem,
   saveChecklistItem: database.saveChecklistItem,
   deleteChecklistItem: database.deleteChecklistItem,

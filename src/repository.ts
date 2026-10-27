@@ -2,9 +2,12 @@ import type { AppPreferences, ChecklistItem, Note, Reminder } from './types';
 
 export interface NotesRepository {
   loadNotes(): Promise<Note[]>;
+  loadTrashedNotes(): Promise<Note[]>;
   insertNote(note: Note): Promise<void>;
   updateNote(note: Note): Promise<void>;
-  deleteNote(noteId: string): Promise<void>;
+  moveNoteToTrash(noteId: string, deletedAt: number): Promise<void>;
+  restoreNote(noteId: string): Promise<void>;
+  permanentlyDeleteNote(noteId: string): Promise<void>;
   addChecklistItem(item: ChecklistItem, updatedAt: number): Promise<void>;
   saveChecklistItem(item: ChecklistItem, updatedAt: number): Promise<void>;
   deleteChecklistItem(itemId: string, noteId: string, updatedAt: number): Promise<void>;

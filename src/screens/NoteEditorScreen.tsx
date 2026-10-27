@@ -27,6 +27,7 @@ import { ChecklistEditor } from '../lists/ChecklistEditor';
 import { palette } from '../theme';
 import { styles } from '../styles';
 import { BackButton } from '../BackButton';
+import { ReminderIcon } from '../ReminderIcon';
 import { noteTypeLabels } from '../noteLabels';
 import type { NotificationPermission } from '../notifications';
 import type { AppPreferences, Note, NoteBlock, Reminder } from '../types';
@@ -205,9 +206,14 @@ export function NoteEditorScreen({
   };
 
   const confirmDelete = () => {
-    Alert.alert('Delete this note?', 'This cannot be undone.', [
+    Alert.alert('Move to Trash?', 'This note will stay in Trash for 30 days before it is automatically deleted.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => onDelete(noteRef.current) },
+      { text: 'Move to Trash', style: 'destructive', onPress: () => void (async () => {
+        await waitForListSaves();
+        await persistCurrent();
+        Keyboard.dismiss();
+        onDelete(noteRef.current);
+      })() },
     ]);
   };
 
@@ -236,10 +242,11 @@ export function NoteEditorScreen({
             onPress={() => openReminders()}
             style={({ pressed }) => [styles.reminderHeaderButton, pressed && styles.pressed]}
           >
-            <Text style={styles.reminderHeaderGlyph}>◷</Text>
+            <ReminderIcon size={17} />
+            <Text style={styles.reminderHeaderText}>Remind</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Delete note" onPress={confirmDelete} style={styles.headerActionRight}>
-            <Text style={styles.deleteText}>Delete</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Move note to Trash" onPress={confirmDelete} style={styles.headerActionRight}>
+            <Text style={styles.deleteText}>Trash</Text>
           </Pressable>
         </View>
 

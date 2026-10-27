@@ -11,7 +11,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { localNotesRepository } from './src/localNotesRepository';
 import {
-  createId, createNote, defaultPreferences, normalizeNoteReminderGroups,
+  createId, createNote, defaultPreferences, isTrashExpired, normalizeNoteReminderGroups, TRASH_RETENTION_MS,
 } from './src/model';
 import { cancelReminderNotifications, checkNotificationPermission, requestNotificationPermission, syncReminderNotification } from './src/notifications';
 import { removeNoteImages } from './src/noteImages';
@@ -34,8 +34,22 @@ export default function App() {
   );
 }
 
+async function purgeExpiredTrash(): Promise<void> {
+  const trashedNotes = await localNotesRepository.loadTrashedNotes();
+  for (const note of trashedNotes.filter((candidate) => isTrashExpired(candidate))) {
+    const reminders = await localNotesRepository.loadReminders(note.id);
+    const cancellations = await Promise.allSettled(reminders.map(cancelReminderNotifications));
+    if (cancellations.some((result) => result.status === 'rejected')) {
+      console.warn(`Could not cancel every reminder before expiring note ${note.id}; it will be retried.`);
+      continue;
+    }
+    await localNotesRepository.permanentlyDeleteNote(note.id);
+    await removeNoteImages(note);
+  }
+}
 function AppContent() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [trashedNotes, setTrashedNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -52,15 +66,19 @@ function AppContent() {
   const refreshNotes = useCallback(async () => {
     try {
       setLoadError(false);
-      const [loadedNotes, loadedReminders, loadedPreferences, loadedPermission] = await Promise.all([
+      await purgeExpiredTrash();
+      const [loadedNotes, loadedTrashedNotes, loadedReminders, loadedPreferences, loadedPermission] = await Promise.all([
         localNotesRepository.loadNotes(),
+        localNotesRepository.loadTrashedNotes(),
         localNotesRepository.loadReminders(),
         localNotesRepository.loadPreferences(),
         checkNotificationPermission(),
       ]);
       setNotes(loadedNotes);
+      setTrashedNotes(loadedTrashedNotes);
       setPreferences(loadedPreferences);
       setPermission(loadedPermission);
+      const trashedNoteIds = new Set(loadedTrashedNotes.map((note) => note.id));
       const normalizedReminders = normalizeNoteReminderGroups(loadedReminders);
       const reconciled = await Promise.allSettled(normalizedReminders.map(async (reminder) => {
         const original = loadedReminders.find((candidate) => candidate.id === reminder.id);
@@ -69,6 +87,13 @@ function AppContent() {
             await cancelReminderNotifications(original);
           }
           await localNotesRepository.saveReminder(reminder);
+        }
+        if (reminder.noteId && trashedNoteIds.has(reminder.noteId)) {
+          await cancelReminderNotifications(reminder);
+          if (reminder.notificationId) {
+            await localNotesRepository.setReminderNotificationId(reminder.id, null);
+          }
+          return { ...reminder, notificationId: null };
         }
         const noteTitle = loadedNotes.find((note) => note.id === reminder.noteId)?.title;
         const notificationId = await syncReminderNotification(
@@ -124,6 +149,13 @@ function AppContent() {
     });
     return () => subscription.remove();
   }, [refreshNotes]);
+  useEffect(() => {
+    if (trashedNotes.length === 0) return;
+    const nextExpiry = Math.min(...trashedNotes.map((note) => (note.deletedAt ?? Date.now()) + TRASH_RETENTION_MS));
+    const delay = Math.max(60_000, Math.min(nextExpiry - Date.now() + 50, 2_147_000_000));
+    const timeout = setTimeout(() => void refreshNotes(), delay);
+    return () => clearTimeout(timeout);
+  }, [refreshNotes, trashedNotes]);
 
   const handleCreate = async (type: NoteType, templateId?: CustomNoteTemplateId) => {
     const note = createNote(type, Date.now(), undefined, templateId);
@@ -149,42 +181,133 @@ function AppContent() {
   };
 
   const handleDelete = async (noteId: string, noteOverride?: Note) => {
+    const noteBeingDeleted = noteOverride ??
+      (activeNote?.id === noteId ? activeNote : notes.find((note) => note.id === noteId) ?? null);
+    if (!noteBeingDeleted) return;
+    const deletedAt = Date.now();
     try {
-      const noteBeingDeleted = noteOverride ??
-        (activeNote?.id === noteId ? activeNote : notes.find((note) => note.id === noteId) ?? null);
+      await localNotesRepository.updateNote(noteBeingDeleted);
       const noteReminders = await localNotesRepository.loadReminders(noteId);
-      await Promise.allSettled(noteReminders.map((reminder) => cancelReminderNotifications(reminder)));
-      await localNotesRepository.deleteNote(noteId);
-      if (noteBeingDeleted) await removeNoteImages(noteBeingDeleted);
+      await localNotesRepository.moveNoteToTrash(noteId, deletedAt);
+      const cancellations = await Promise.allSettled(noteReminders.map(async (reminder) => {
+        await cancelReminderNotifications(reminder);
+        if (reminder.notificationId) {
+          await localNotesRepository.setReminderNotificationId(reminder.id, null);
+        }
+      }));
+      const canceledReminderIds = new Set(noteReminders.filter((_, index) =>
+        cancellations[index]?.status === 'fulfilled',
+      ).map((reminder) => reminder.id));
       setNotes((current) => current.filter((note) => note.id !== noteId));
-      setReminders((current) => current.filter((reminder) => reminder.noteId !== noteId));
+      setTrashedNotes((current) => [
+        { ...noteBeingDeleted, deletedAt },
+        ...current.filter((note) => note.id !== noteId),
+      ].sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)));
+      setReminders((current) => current.map((reminder) =>
+        reminder.noteId === noteId && canceledReminderIds.has(reminder.id)
+          ? { ...reminder, notificationId: null }
+          : reminder));
       setActiveNote(null);
+      if (cancellations.some((result) => result.status === 'rejected')) {
+        Alert.alert('Moved to Trash', 'A reminder could not be canceled yet. The app will retry when it refreshes.');
+      }
     } catch {
-      Alert.alert('Could not delete note', 'Please try again.');
+      Alert.alert('Could not move note to Trash', 'Your note is still on this device. Please try again.');
+    }
+  };
+  const handleRestore = async (trashedNote: Note) => {
+    try {
+      await localNotesRepository.restoreNote(trashedNote.id);
+      const restored = { ...trashedNote, deletedAt: null };
+      setTrashedNotes((current) => current.filter((note) => note.id !== restored.id));
+      setNotes((current) => [restored, ...current.filter((note) => note.id !== restored.id)]
+        .sort((a, b) => b.updatedAt - a.updatedAt));
+      const noteReminders = await localNotesRepository.loadReminders(restored.id);
+      const results = await Promise.allSettled(noteReminders.map(async (reminder) => {
+        const notificationId = await syncReminderNotification(
+          reminder,
+          preferences.remindersEnabled,
+          true,
+          restored.title,
+        );
+        await localNotesRepository.setReminderNotificationId(reminder.id, notificationId);
+        return { ...reminder, notificationId };
+      }));
+      setReminders((current) => {
+        const restoredReminders = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+        const restoredIds = new Set(noteReminders.map((reminder) => reminder.id));
+        return [...current.filter((reminder) => !restoredIds.has(reminder.id)), ...restoredReminders];
+      });
+      if (results.some((result) => result.status === 'rejected')) {
+        Alert.alert('Note restored', 'The note is back, but one of its reminders could not be rescheduled.');
+      }
+    } catch {
+      Alert.alert('Could not restore note', 'Please try again.');
     }
   };
 
+  const handlePermanentDelete = async (trashedNote: Note) => {
+    try {
+      const noteReminders = await localNotesRepository.loadReminders(trashedNote.id);
+      const cancellations = await Promise.allSettled(noteReminders.map(cancelReminderNotifications));
+      if (cancellations.some((result) => result.status === 'rejected')) {
+        throw new Error('Some reminder notifications could not be canceled.');
+      }
+      await localNotesRepository.permanentlyDeleteNote(trashedNote.id);
+      await removeNoteImages(trashedNote);
+      setTrashedNotes((current) => current.filter((note) => note.id !== trashedNote.id));
+      setReminders((current) => current.filter((reminder) => reminder.noteId !== trashedNote.id));
+    } catch {
+      Alert.alert('Could not permanently delete note', 'Please try again. The note is still in Trash.');
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    try {
+      for (const trashedNote of trashedNotes) {
+        const noteReminders = await localNotesRepository.loadReminders(trashedNote.id);
+        const cancellations = await Promise.allSettled(noteReminders.map(cancelReminderNotifications));
+        if (cancellations.some((result) => result.status === 'rejected')) {
+          throw new Error(`Could not cancel reminders for note ${trashedNote.id}.`);
+        }
+        await localNotesRepository.permanentlyDeleteNote(trashedNote.id);
+        await removeNoteImages(trashedNote);
+      }
+      setTrashedNotes([]);
+      setReminders((current) => current.filter((reminder) => reminder.noteId === null));
+    } catch {
+      await refreshNotes();
+      Alert.alert('Trash was only partly emptied', 'Some notes could not be removed. Any remaining notes are still in Trash.');
+    }
+  };
   const handlePreferencesChange = async (next: AppPreferences) => {
     try {
       await localNotesRepository.savePreferences(next);
       setPreferences(next);
       if (next.remindersEnabled !== preferences.remindersEnabled) {
         const allReminders = await localNotesRepository.loadReminders();
+        const trashedNoteIds = new Set(trashedNotes.map((note) => note.id));
         const reconciliation = await Promise.allSettled(allReminders.map(async (reminder) => {
+          if (reminder.noteId && trashedNoteIds.has(reminder.noteId)) {
+            await cancelReminderNotifications(reminder);
+            if (reminder.notificationId) {
+              await localNotesRepository.setReminderNotificationId(reminder.id, null);
+            }
+            return;
+          }
           const noteTitle = notes.find((note) => note.id === reminder.noteId)?.title;
           const notificationId = await syncReminderNotification(reminder, next.remindersEnabled, false, noteTitle);
           await localNotesRepository.setReminderNotificationId(reminder.id, notificationId);
         }));
         setReminders(await localNotesRepository.loadReminders());
         if (reconciliation.some((result) => result.status === 'rejected')) {
-          Alert.alert('Settings saved', 'One or more reminders could not be rescheduled on this device.');
+          Alert.alert('Settings saved', 'One or more reminders could not be updated on this device.');
         }
       }
     } catch {
       Alert.alert('Could not save settings', 'Please try again.');
     }
   };
-
   const handleGlobalReminderToggle = (enabled: boolean) => {
     const applySetting = async (allowRequest: boolean) => {
       if (allowRequest) setPermission(await requestNotificationPermission());
@@ -246,15 +369,19 @@ function AppContent() {
       reminders={reminders}
       onRemindersChanged={() => void handleReminderListChanged()}
       onPermissionChanged={setPermission}
+      trashedNotes={trashedNotes}
+      onRestore={handleRestore}
+      onDeletePermanently={handlePermanentDelete}
+      onEmptyTrash={handleEmptyTrash}
       onPreferencesChange={(next) => void handlePreferencesChange(next)}
       onReminderSettingChange={handleGlobalReminderToggle}
       onRetry={() => void refreshNotes()}
       onCreate={(type, templateId) => void handleCreate(type, templateId)}
       onOpen={handleOpen}
       onDelete={(note) => {
-        Alert.alert('Delete this note?', 'This cannot be undone.', [
+        Alert.alert('Move to Trash?', 'This note will stay in Trash for 30 days before it is automatically deleted.', [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => void handleDelete(note.id) },
+          { text: 'Move to Trash', style: 'destructive', onPress: () => void handleDelete(note.id) },
         ]);
       }}
     />
