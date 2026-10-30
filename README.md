@@ -224,4 +224,4 @@ The project is evolving, but areas for future improvement include:
 
 ## License
 
-The repository's `package.json` currently declares **0BSD**, while the checked-in `LICENSE` file contains MIT license text. These currently disagree, so the project's licensing needs to be reconciled before others rely on either license. See [LICENSE](./LICENSE) and [package.json](./package.json).
+This project is released under the **0BSD** license. You may use, copy, modify and distribute the software for any purpose, with or without fee, subject to the terms in [LICENSE](./LICENSE). The license identifier in `package.json` is also set to `0BSD`.
