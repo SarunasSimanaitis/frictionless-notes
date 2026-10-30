@@ -70,7 +70,7 @@ It's not about reinventing note-taking. It's about paying attention to the detai
 
 ## Screenshots
 
-The interface is available in both light and dark themes. Screenshots are intentionally displayed at a smaller, consistent width so the gallery stays easy to scan.
+The interface is available in both light and dark themes. Screenshots are displayed at a consistent width while keeping the gallery compact and easy to scan.
 
 ### Light theme
 
@@ -78,27 +78,27 @@ The interface is available in both light and dark themes. Screenshots are intent
   <tr>
     <td align="center" width="50%">
       <strong>Home</strong><br>
-      <img src="./screenshots/01-home-light.png" width="220" alt="Home screen — light theme">
+      <img src="./screenshots/01-home-light.png" width="280" alt="Home screen — light theme">
     </td>
     <td align="center" width="50%">
       <strong>Shopping list</strong><br>
-      <img src="./screenshots/02-shopping-list-light.png" width="220" alt="Shopping list — light theme">
+      <img src="./screenshots/02-shopping-list-light.png" width="280" alt="Shopping list — light theme">
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
       <strong>Rich-text editor</strong><br>
-      <img src="./screenshots/03-rich-text-editor-light.png" width="220" alt="Rich-text editor — light theme">
+      <img src="./screenshots/03-rich-text-editor-light.png" width="280" alt="Rich-text editor — light theme">
     </td>
     <td align="center" width="50%">
       <strong>Reminders</strong><br>
-      <img src="./screenshots/04-reminders-light.png" width="220" alt="Reminders — light theme">
+      <img src="./screenshots/04-reminders-light.png" width="280" alt="Reminders — light theme">
     </td>
   </tr>
   <tr>
     <td align="center" colspan="2">
       <strong>Settings</strong><br>
-      <img src="./screenshots/05-settings-light.png" width="220" alt="Settings — light theme">
+      <img src="./screenshots/05-settings-light.png" width="280" alt="Settings — light theme">
     </td>
   </tr>
 </table>
@@ -109,17 +109,17 @@ The interface is available in both light and dark themes. Screenshots are intent
   <tr>
     <td align="center" width="50%">
       <strong>Home</strong><br>
-      <img src="./screenshots/06-home-dark.png" width="220" alt="Home screen — dark theme">
+      <img src="./screenshots/06-home-dark.png" width="280" alt="Home screen — dark theme">
     </td>
     <td align="center" width="50%">
       <strong>Shopping list</strong><br>
-      <img src="./screenshots/07-shopping-list-dark.png" width="220" alt="Shopping list — dark theme">
+      <img src="./screenshots/07-shopping-list-dark.png" width="280" alt="Shopping list — dark theme">
     </td>
   </tr>
   <tr>
     <td align="center" colspan="2">
       <strong>Settings</strong><br>
-      <img src="./screenshots/08-settings-dark.png" width="220" alt="Settings — dark theme">
+      <img src="./screenshots/08-settings-dark.png" width="280" alt="Settings — dark theme">
     </td>
   </tr>
 </table>
