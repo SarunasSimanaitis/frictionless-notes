@@ -22,7 +22,8 @@
       "translucent": false
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.frictionlessnotes.app"
     },
     "android": {
       "package": "com.frictionlessnotes.app",
