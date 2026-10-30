@@ -68,6 +68,32 @@ It's not about reinventing note-taking. It's about paying attention to the detai
 - **Trash and recovery** — restore deleted notes during the 30-day retention period or permanently delete them.
 - **Offline-first storage** — notes are stored locally with SQLite; note images are kept in the app's documents directory.
 
+## Screenshots
+
+The interface is available in both light and dark themes.
+
+### Light theme
+
+| Home | Shopping list |
+| --- | --- |
+| ![Home screen — light theme](./screenshots/01-home-light.png) | ![Shopping list — light theme](./screenshots/02-shopping-list-light.png) |
+
+| Rich-text editor | Reminders |
+| --- | --- |
+| ![Rich-text editor — light theme](./screenshots/03-rich-text-editor-light.png) | ![Reminders — light theme](./screenshots/04-reminders-light.png) |
+
+![Settings — light theme](./screenshots/05-settings-light.png)
+
+### Dark theme
+
+| Home | Shopping list |
+| --- | --- |
+| ![Home screen — dark theme](./screenshots/06-home-dark.png) | ![Shopping list — dark theme](./screenshots/07-shopping-list-dark.png) |
+
+![Settings — dark theme](./screenshots/08-settings-dark.png)
+
+---
+
 ## Tech stack
 
 | Area | Technology |
