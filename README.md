@@ -1,66 +1,141 @@
 # Frictionless Notes
 
-An offline-first notes app for Android and iPhone, with Quick Notes, formatted Custom Notes, embedded checklists, shopping lists, and local reminders.
+**An offline-first notes app for Android and iOS, built with React Native, Expo and TypeScript.**
 
-## Run it on Android
-
-The Custom Note editor uses TenTap Advanced Setup. SDK 58 now matches your installed Expo Go version, but TenTap requires a development client for this advanced editor setup. Use Expo Go only for basic experiments; use the development build for the complete app. See [TenTap setup](https://github.com/10play/10tap-editor#expo) and [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/).
-
-1. Install Node.js 22.13 or newer, Android Studio/Android SDK, and enable USB debugging on a physical phone (or start an Android emulator).
-2. From this folder, run `npm install`. The postinstall script applies the version-checked DraggableFlatList compatibility patch and builds the custom TenTap editor bundle.
-3. Build and install the development client with `npx expo run:android`.
-4. Start Metro with `npx expo start --dev-client`, then open the installed development build on the phone or emulator.
-
-If you do not have the Android SDK locally, build a development APK with `npx eas-cli build --platform android --profile development`. The app uses Expo SDK 58 (React Native 0.88 and React 19.3). Local reminders remain on-device; exact alert delivery depends on system permissions and battery policies.
-
-## Installable Android APK
-
-An internal APK profile is defined in `eas.json`. From the project folder:
-
-```sh
-npm install
-npx eas-cli login
-npx eas-cli build:configure
-npx eas-cli build --platform android --profile preview
-```
-
-On first setup, EAS may ask you to create an Expo project and an Android signing keystore. Choose the existing Expo project if one has already been linked; otherwise create one under your Expo account and keep the generated keystore on EAS. When the build completes, open the install URL from the EAS build page on your Android phone and approve installation from that source. The preview profile produces an APK for direct installation; the production profile keeps the default Play Store app bundle format.
+Frictionless Notes focuses on making everyday notes, checklists and shopping lists quick to create and comfortable to use. Notes are stored locally on the device, with no account or cloud service required.
 
 ## Features
 
-- Notes, checklists, shopping lists, reminders, preferences, and photo copies are stored locally in SQLite or the app's documents directory.
-- Checklist entry stays in the editor's flex layout while the list scrolls independently. `KeyboardAvoidingView` applies bottom padding on Android and iOS; the Android app config also requests `resize` for native builds.
-- Add list entries with the keyboard Done action or the Add button while keeping the keyboard open. Tap an item to check it off, edit its text, or hold it for about 700 ms to reorder. Screen readers can move items up and down.
-- Plain text notes can include embedded checklists between paragraphs. In Custom Notes, the compact toolbar supports font family and size, bold, italic, underline, text and highlight colors, headings, lists, alignment, and paragraph spacing. The toolbar stays above the document and away from the keyboard.
-- Custom Notes include blank, plan, and journal starters; six backgrounds; plain, lined, dotted, or grid paper; three margins; and offline inline photos that can be dragged, repositioned, resized, replaced, or removed.
-- Existing plain text notes remain readable. Additive `editor_mode`, `blocks_json`, and `appearance_json` columns store editor mode, document blocks, and page style without resetting the SQLite database.
-- Reminder times use the device's local time zone. “After work” defaults to 17:30 and is configurable. Android settings report app permission separately from a blocked Reminders notification channel.
+- **Quick Notes** — capture and edit everyday notes.
+- **Checklists and shopping lists** — add, check off, edit and reorder items.
+- **Custom Notes** — rich-text editing with formatting for fonts, sizes, emphasis, colors, headings, lists, alignment and paragraph spacing.
+- **Embedded checklists** — mix checklist blocks with normal text in a single note.
+- **Note appearance** — choose page backgrounds, paper styles, margins and templates.
+- **Inline images** — add local photos to Custom Notes, then move, resize, replace or remove them.
+- **Reminders** — schedule local reminders using the device's time zone.
+- **Trash and recovery** — restore deleted notes during the 30-day retention period or permanently delete them.
+- **Offline-first storage** — note data is stored locally with SQLite; copied note images are kept in the app's documents directory.
 
-## Architecture
+## Tech stack
 
-- `App.tsx` coordinates startup, app state, notification responses, and screen navigation.
-- `src/screens/` contains the home and note editor screens; checklist and shopping-list editing stays within the note editor screen.
-- Screens and reminder UI use the `NotesRepository` contract. `localNotesRepository` adapts that contract to `src/database.ts`, which owns SQLite queries and additive migrations.
-- `src/model.ts` owns document serialization, stable IDs, validation, and note/list operations. Reminder scheduling lives in `src/notifications.ts`; image copies live in `src/noteImages.ts`.
-- `src/editor/` contains the Custom Note document editor, formatting toolbar, font bridge, and styling helpers. UI selection and toolbar menu state stay separate from the serializable note blocks.
+- React Native 0.88
+- Expo SDK 58
+- TypeScript
+- SQLite (`expo-sqlite`)
+- Expo Notifications and Image Picker
+- TenTap / Tiptap for the Custom Note editor
+- React Native Gesture Handler, Reanimated and Draggable FlatList
+- Vite for building the custom editor bundle
 
-## Future shared notes
+## Requirements
 
-Sharing, authentication, cloud synchronization, and billing are not implemented. Notes remain fully usable offline. Before sharing is built, the product will need authentication, invitations, view-only and edit permissions, server-side authorization, synchronization, concurrent-edit handling, offline change/conflict resolution, notification delivery, and subscription entitlements if sharing becomes paid. No cloud service or speculative sync layer is currently connected.
+- Node.js **22.13 or newer** (the EAS build profiles use Node.js 22.23.3)
+- npm
+- Android Studio and Android SDK for local Android builds
+- A physical Android device with USB debugging enabled, or an Android emulator
 
-## Pagination decision
+The complete Custom Note editor uses TenTap's advanced editor setup and a development build. Expo Go is suitable only for basic experiments; it does not provide the complete native app setup.
 
-Custom Notes remain continuous, vertically scrolling documents. Paragraph, checklist, and image blocks share one scroll container. The current document model has no page boundaries, so fixed-height sheets could split mixed content unpredictably. Reliable pagination needs a separate design for measuring and moving those blocks while preserving selection and scroll position; it is deferred.
+## Getting started
 
-## Checks
+```bash
+npm install
+```
 
-- `npm run typecheck` checks the strict TypeScript project.
-- `npm test` covers checklist entry/edit/toggle/delete/reordering, reminders, mixed-content insertion and persistence, rich Custom Note formatting storage, image and appearance storage, keyboard layout, and UI architecture contracts.
-- `npx expo install --check` checks installed package versions against the Expo SDK.
-- `npx expo-doctor` checks Expo project health.
-- `npx expo export --platform android --output-dir dist` builds the Android JavaScript bundle.
-- No lint script is configured.
+The `postinstall` script applies the version-checked compatibility patch for `react-native-draggable-flatlist` and builds the custom TenTap editor bundle.
 
-## Physical Android checks
+Start the Expo development server:
 
-The source and bundle checks do not verify the phone UI. On a development build, verify Gboard placement and item entry; checklist reorder and persistence; reminder delivery and permission states; embedded checklists; Custom Note selection and formatting; image persistence; and note reopen/search behavior.
+```bash
+npx expo start --dev-client
+```
+
+For the full app, first build and install the development client:
+
+```bash
+npx expo run:android
+```
+
+Then start Metro with `npx expo start --dev-client` and open the installed development build on your device or emulator.
+
+## Build an installable Android APK
+
+An internal preview profile is configured in `eas.json` and produces an APK:
+
+```bash
+npx eas-cli login
+npx eas-cli build --platform android --profile preview
+```
+
+For a local Android build, make sure Android Studio and the Android SDK are installed and configured, then run:
+
+```bash
+npx expo run:android
+```
+
+The `production` EAS profile is configured for a production Android app bundle. Review app signing and store metadata before publishing to Google Play.
+
+## Useful scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm start` | Start Expo |
+| `npm run android` | Build and run the Android app locally |
+| `npm run typecheck` | Run the TypeScript type check |
+| `npm test` | Run the Node.js test suite |
+| `npm run editor:build` | Build the custom TenTap editor bundle |
+| `npx expo install --check` | Check package versions against the Expo SDK |
+| `npx expo-doctor` | Check Expo project configuration and dependencies |
+
+## Project structure
+
+```text
+.
+├── App.tsx                    # App startup, state and navigation
+├── assets/                    # App icon, logo and splash artwork
+├── editor-web/                # Custom TenTap editor and Vite build
+├── scripts/                   # Dependency compatibility patch
+├── src/
+│   ├── editor/                # Custom Note editor and formatting UI
+│   ├── lists/                 # Checklist components
+│   ├── screens/               # Home and note editor screens
+│   ├── database.ts            # SQLite database and migrations
+│   ├── model.ts               # Note models and domain operations
+│   ├── notifications.ts       # Local reminder scheduling
+│   └── noteImages.ts          # Local image storage
+├── tests/                     # Model, theme and UI contract tests
+├── app.json                   # Expo app configuration
+├── eas.json                   # EAS build profiles
+└── package.json
+```
+
+## Data and privacy
+
+Notes, checklist items, preferences, reminder metadata and document content are stored locally on the device. Note images are copied into the app's local documents storage. The project does not currently implement accounts, cloud synchronization, collaboration or a remote backend.
+
+Uninstalling the app or clearing its data can remove locally stored notes and images. Back up important information before removing the app or resetting device data.
+
+## Verification
+
+Run the following checks before preparing a release:
+
+```bash
+npm run typecheck
+npm test
+npx expo install --check
+npx expo-doctor
+npx expo export --platform android --output-dir dist
+```
+
+Automated checks do not replace testing on a physical Android device. Verify keyboard behavior, checklist editing and reordering, reminder permissions and delivery, Custom Note formatting, image persistence, Trash recovery and note search/reopening on-device.
+
+## Current limitations
+
+- No account system or cloud backup/synchronization.
+- No shared notes or real-time collaboration.
+- Reminder delivery is subject to operating-system notification permissions and battery-management policies.
+- Custom Notes are continuous scrolling documents; fixed-page pagination is not implemented.
+
+## License
+
+This project currently declares the **0BSD** license in `package.json`. See [LICENSE](./LICENSE) for the license text.

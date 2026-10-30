@@ -11,13 +11,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { localNotesRepository } from './src/localNotesRepository';
 import {
-  createId, createNote, defaultPreferences, isTrashExpired, normalizeNoteReminderGroups, TRASH_RETENTION_MS,
+  createId, createNote, defaultPreferences, isTrashExpired, normalizeNoteReminderGroups, sortNotes, TRASH_RETENTION_MS,
 } from './src/model';
 import { cancelReminderNotifications, checkNotificationPermission, requestNotificationPermission, syncReminderNotification } from './src/notifications';
 import { removeNoteImages } from './src/noteImages';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { NoteEditorScreen } from './src/screens/NoteEditorScreen';
-import { palette } from './src/theme';
+import { palette, setThemeMode } from './src/theme';
 import { styles } from './src/styles';
 import type {
   AppPreferences, CustomNoteTemplateId, Note, NoteType, Reminder,
@@ -74,8 +74,9 @@ function AppContent() {
         localNotesRepository.loadPreferences(),
         checkNotificationPermission(),
       ]);
-      setNotes(loadedNotes);
+      setNotes(sortNotes(loadedNotes));
       setTrashedNotes(loadedTrashedNotes);
+      setThemeMode(loadedPreferences.themeMode);
       setPreferences(loadedPreferences);
       setPermission(loadedPermission);
       const trashedNoteIds = new Set(loadedTrashedNotes.map((note) => note.id));
@@ -131,7 +132,7 @@ function AppContent() {
         const latestNotes = await localNotesRepository.loadNotes();
         const target = latestNotes.find((note) => note.id === noteId);
         if (!target) return;
-        setNotes(latestNotes);
+        setNotes(sortNotes(latestNotes));
         setActiveNote(target);
       } catch {
         // A notification can outlive the note if it was removed on another screen.
@@ -161,7 +162,7 @@ function AppContent() {
     const note = createNote(type, Date.now(), undefined, templateId);
     try {
       await localNotesRepository.insertNote(note);
-      setNotes((current) => [note, ...current]);
+      setNotes((current) => sortNotes([note, ...current]));
       setActiveNote(note);
     } catch {
       Alert.alert('Could not create note', 'Please try again.');
@@ -176,8 +177,18 @@ function AppContent() {
       const next = exists
         ? current.map((item) => (item.id === savedNote.id ? savedNote : item))
         : [savedNote, ...current];
-      return next.sort((a, b) => b.updatedAt - a.updatedAt);
+      return sortNotes(next);
     });
+  };
+
+  const handleTogglePin = async (note: Note) => {
+    const updated = { ...note, isPinned: !note.isPinned, updatedAt: Date.now() };
+    try {
+      await localNotesRepository.updateNote(updated);
+      setNotes((current) => sortNotes(current.map((candidate) => candidate.id === note.id ? updated : candidate)));
+    } catch {
+      Alert.alert('Could not update pin', 'Please try again.');
+    }
   };
 
   const handleDelete = async (noteId: string, noteOverride?: Note) => {
@@ -187,6 +198,7 @@ function AppContent() {
     const deletedAt = Date.now();
     try {
       await localNotesRepository.updateNote(noteBeingDeleted);
+      await localNotesRepository.replaceChecklistItems(noteId, noteBeingDeleted.items, noteBeingDeleted.updatedAt);
       const noteReminders = await localNotesRepository.loadReminders(noteId);
       await localNotesRepository.moveNoteToTrash(noteId, deletedAt);
       const cancellations = await Promise.allSettled(noteReminders.map(async (reminder) => {
@@ -220,8 +232,7 @@ function AppContent() {
       await localNotesRepository.restoreNote(trashedNote.id);
       const restored = { ...trashedNote, deletedAt: null };
       setTrashedNotes((current) => current.filter((note) => note.id !== restored.id));
-      setNotes((current) => [restored, ...current.filter((note) => note.id !== restored.id)]
-        .sort((a, b) => b.updatedAt - a.updatedAt));
+      setNotes((current) => sortNotes([restored, ...current.filter((note) => note.id !== restored.id)]));
       const noteReminders = await localNotesRepository.loadReminders(restored.id);
       const results = await Promise.allSettled(noteReminders.map(async (reminder) => {
         const notificationId = await syncReminderNotification(
@@ -283,6 +294,7 @@ function AppContent() {
   const handlePreferencesChange = async (next: AppPreferences) => {
     try {
       await localNotesRepository.savePreferences(next);
+      setThemeMode(next.themeMode);
       setPreferences(next);
       if (next.remindersEnabled !== preferences.remindersEnabled) {
         const allReminders = await localNotesRepository.loadReminders();
@@ -378,6 +390,7 @@ function AppContent() {
       onRetry={() => void refreshNotes()}
       onCreate={(type, templateId) => void handleCreate(type, templateId)}
       onOpen={handleOpen}
+      onTogglePin={(note) => void handleTogglePin(note)}
       onDelete={(note) => {
         Alert.alert('Move to Trash?', 'This note will stay in Trash for 30 days before it is automatically deleted.', [
           { text: 'Cancel', style: 'cancel' },

@@ -1,7 +1,8 @@
+import { ChecklistItemLabel } from '../lists/ChecklistItemLabel';
+import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import {
   Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputInstance, type ViewStyle,
 } from 'react-native';
-import { NestableDraggableFlatList, NestableScrollContainer, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { RichText, TenTapStartKit, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
 import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
@@ -27,15 +28,18 @@ type ShallowEditorThemeOptions = Omit<EditorBridgeOptions, 'theme'> & {
 // TenTap's recursive theme type expands React Native 0.88's StyleProp until TypeScript hits its depth limit.
 const useEditorBridgeWithTheme = useEditorBridge as unknown as (options?: ShallowEditorThemeOptions) => EditorBridge;
 
-export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEditorRef, onBlocksChange, onBlocksCommit, onAppearanceChange }: {
+export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEditorRef, onBlocksChange, onBlocksCommit, onAppearanceChange, quickNoteToolbarMode = 'simple', themeMode = 'light' }: {
   note: Note;
   firstParagraphInputRef: MutableRefObject<TextInputInstance | null>;
   firstRichEditorRef: MutableRefObject<EditorBridge | null>;
   onBlocksChange: (blocks: NoteBlock[]) => void;
   onBlocksCommit: (blocks: NoteBlock[], obsoleteImageUris?: string[]) => Promise<boolean>;
   onAppearanceChange: (appearance: NoteAppearance) => void;
+  quickNoteToolbarMode?: 'simple' | 'advanced';
+  themeMode?: 'light' | 'dark';
 }) {
   const isCustom = note.type === 'custom';
+  const usesRichText = isCustom || (note.type === 'text' && quickNoteToolbarMode === 'advanced');
   const [pageStyleOpen, setPageStyleOpen] = useState(false);
   const [activeRichEditor, setActiveRichEditor] = useState<ActiveRichEditor | null>(null);
   const activeRichEditorRef = useRef<ActiveRichEditor | null>(null);
@@ -46,7 +50,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   const [paragraphHeights, setParagraphHeights] = useState<Record<string, number>>({});
   const { width: viewportWidth } = useWindowDimensions();
   const firstParagraphId = note.blocks.find((block) => block.type === 'paragraph')?.id;
-  const pageColor = noteBackgroundColors[note.appearance.background];
+  const pageColor = note.appearance.customBackgroundColor ?? (themeMode === 'dark' && note.appearance.background === 'warmWhite' ? palette.background : noteBackgroundColors[note.appearance.background]);
   const pageMargin = isCustom ? noteMarginValues[note.appearance.margin] : 0;
 
   const updateActiveRichEditor = useCallback((
@@ -59,8 +63,22 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   ) => {
     const current = activeRichEditorRef.current;
     if (!state.isFocused && !(isFirst && state.isReady && !current) && current?.blockId !== blockId) return;
+
     const next = { editor, state, blockId, alignment, spacing } as ActiveRichEditor;
     activeRichEditorRef.current = next;
+
+    // TenTap can return a fresh state object on each render even when no editor
+    // state actually changed. Avoid feeding that identity change back into React
+    // state, which otherwise creates a render/effect/update loop.
+    if (
+      current &&
+      current.editor === editor &&
+      current.blockId === blockId &&
+      current.alignment === alignment &&
+      current.spacing === spacing &&
+      areEditorStatesEquivalent(current.state, next.state)
+    ) return;
+
     setActiveRichEditor(next);
   }, []);
 
@@ -77,7 +95,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
 
   const updateParagraph = (paragraphId: string, text: string) => {
     onBlocksChange(note.blocks.map((block) => block.id === paragraphId && block.type === 'paragraph'
-      ? { ...block, text }
+      ? { ...block, text, richHtml: undefined }
       : block));
   };
 
@@ -151,7 +169,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
 
   return (
     <View style={[styles.documentEditor, isCustom && styles.customDocumentEditor]}>
-      {isCustom ? (
+      {quickNoteToolbarMode === 'advanced' ? (
         <FormattingToolbar
           active={activeRichEditor}
           defaultFontFamily={note.appearance.font}
@@ -159,32 +177,23 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
           onSpacingChange={updateParagraphSpacing}
           onInsertChecklist={insertChecklist}
           onInsertImage={() => void insertImage()}
-          onOpenPageStyle={() => setPageStyleOpen(true)}
+          onOpenPageStyle={() => { if (isCustom) setPageStyleOpen(true); }}
         />
-      ) : (
-        <View style={styles.documentToolbar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Insert checklist at the cursor"
-            onPress={insertChecklist}
-            style={({ pressed }) => [styles.documentInsertButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.documentInsertText}>+ Checklist</Text>
-          </Pressable>
-        </View>
-      )}
-      <NestableScrollContainer
-        style={[styles.documentScroll, isCustom && { backgroundColor: pageColor }]}
+      ) : null}
+
+      <ScrollView
+        style={[styles.documentScroll, usesRichText && { backgroundColor: pageColor }]}
         contentContainerStyle={[styles.documentContent, isCustom && { paddingHorizontal: pageMargin }]}
         keyboardShouldPersistTaps="always"
         keyboardDismissMode="none"
       >
         {note.blocks.map((block) => block.type === 'paragraph' ? (
-          isCustom ? (
+          usesRichText ? (
             <RichParagraphEditor
               key={block.id}
               block={block}
               appearance={note.appearance}
+              themeMode={themeMode}
               alignment={block.alignment ?? 'left'}
               spacing={block.spacing ?? 'normal'}
               placeholder={note.blocks.length === 1 ? 'Start writing…' : 'Continue writing…'}
@@ -230,7 +239,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
               textAlignVertical="top"
               placeholder={note.blocks.length === 1 ? 'Start writing…' : 'Continue writing…'}
               placeholderTextColor={palette.faint}
-              style={[styles.documentParagraphInput, { height: paragraphHeights[block.id] ?? 44 }]}
+              style={[styles.documentParagraphInput, { height: paragraphHeights[block.id] ?? 44, fontSize: note.appearance.quickFontSize ?? 16, color: note.appearance.quickTextColor ?? palette.ink, fontFamily: note.appearance.font === 'serif' ? 'serif' : undefined }]}
               selectionColor={palette.accent}
             />
           )
@@ -239,12 +248,18 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
             key={block.id}
             noteId={note.id}
             block={block}
-            backgroundColor={isCustom ? pageColor : palette.surface}
             onItemsChange={(items) => onBlocksChange(note.blocks.map((candidate) =>
               candidate.id === block.id && candidate.type === 'checklist'
                 ? { ...candidate, items }
                 : candidate,
             ))}
+            onRemove={() => Alert.alert('Remove checklist?', 'This removes the checklist and its items from this note.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Remove checklist', style: 'destructive', onPress: () => {
+                const nextBlocks = note.blocks.filter((candidate) => candidate.id !== block.id);
+                onBlocksChange(nextBlocks.length ? nextBlocks : [{ id: createId(), type: 'paragraph', text: '' }]);
+              } },
+            ])}
           />
         ) : (
           <InlineNoteImage
@@ -256,7 +271,7 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
             onBlocksCommit={onBlocksCommit}
           />
         ))}
-      </NestableScrollContainer>
+      </ScrollView>
       {isCustom ? (
         <PageStyleModal
           visible={pageStyleOpen}
@@ -269,14 +284,44 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   );
 }
 
+function areEditorStatesEquivalent(previous: ActiveRichEditor['state'], next: ActiveRichEditor['state']): boolean {
+  const previousValues = previous as unknown as Record<string, unknown>;
+  const nextValues = next as unknown as Record<string, unknown>;
+  const previousKeys = Object.keys(previousValues);
+  const nextKeys = Object.keys(nextValues);
+  if (previousKeys.length !== nextKeys.length) return false;
+
+  const equivalentValue = (a: unknown, b: unknown): boolean => {
+    if (a === b) return true;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      return a.length === b.length && a.every((value, index) => equivalentValue(value, b[index]));
+    }
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      const aRecord = a as Record<string, unknown>;
+      const bRecord = b as Record<string, unknown>;
+      const aKeys = Object.keys(aRecord);
+      const bKeys = Object.keys(bRecord);
+      return aKeys.length === bKeys.length && aKeys.every((key) =>
+        Object.prototype.hasOwnProperty.call(bRecord, key) && equivalentValue(aRecord[key], bRecord[key]),
+      );
+    }
+    return false;
+  };
+
+  return nextKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(previousValues, key) && equivalentValue(previousValues[key], nextValues[key]),
+  );
+}
+
 function textAsHtml(text: string): string {
   const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<p>${escaped.replace(/\n/g, '<br>') || '<br>'}</p>`;
 }
 
-function RichParagraphEditor({ block, appearance, alignment, spacing, placeholder, focusedBlockId, firstEditorRef, isFirst, onEditorStateChange, onChange }: {
+function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing, placeholder, focusedBlockId, firstEditorRef, isFirst, onEditorStateChange, onChange }: {
   block: ParagraphBlock;
   appearance: NoteAppearance;
+  themeMode: 'light' | 'dark';
   alignment: 'left' | 'center' | 'right';
   spacing: 'compact' | 'normal' | 'relaxed';
   placeholder: string;
@@ -293,7 +338,7 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
   ) => void;
   onChange: (html: string, text: string) => void;
 }) {
-  const backgroundColor = noteBackgroundColors[appearance.background];
+  const backgroundColor = appearance.customBackgroundColor ?? (themeMode === 'dark' && appearance.background === 'warmWhite' ? palette.background : noteBackgroundColors[appearance.background]);
   const editorTheme = {
     webview: { backgroundColor },
     webviewContainer: { backgroundColor },
@@ -332,9 +377,9 @@ function RichParagraphEditor({ block, appearance, alignment, spacing, placeholde
 
   useEffect(() => {
     if (!editorState.isReady) return;
-    editor.injectCSS(customNoteCss(appearance, alignment, spacing), 'page-style');
+    editor.injectCSS(customNoteCss(appearance, alignment, spacing, themeMode), 'page-style');
     editor.setPlaceholder(placeholder);
-  }, [alignment, appearance, editor, editorState.isReady, placeholder, spacing]);
+  }, [alignment, appearance, editor, editorState.isReady, placeholder, spacing, themeMode]);
 
   useEffect(() => {
     if (typeof html !== 'string') return;
@@ -362,7 +407,13 @@ function PageStyleModal({ visible, appearance, onClose, onChange }: {
   onClose: () => void;
   onChange: (appearance: NoteAppearance) => void;
 }) {
-  const setBackground = (background: NoteBackground) => onChange({ ...appearance, background });
+  const [customColorDraft, setCustomColorDraft] = useState(appearance.customBackgroundColor ?? '#F7F6F1');
+  const setBackground = (background: NoteBackground) => onChange({ ...appearance, background, customBackgroundColor: undefined });
+  const setCustomColor = (color: string) => {
+    const normalized = color.trim().startsWith('#') ? color.trim() : `#${color.trim()}`;
+    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) onChange({ ...appearance, customBackgroundColor: normalized });
+  };
+  const customColors = ['#F7F6F1', '#FFFFFF', '#F5E9D7', '#FBE1E8', '#E3F2E1', '#DDEBFA', '#E9E1FA', '#D5F2EF', '#242B35', '#343434', '#6B3442', '#2C4C3B'];
   const setPaper = (paper: PaperStyle) => onChange({ ...appearance, paper });
   const setMargin = (margin: NoteMargin) => onChange({ ...appearance, margin });
   const backgrounds: NoteBackground[] = ['warmWhite', 'white', 'cream', 'pink', 'green', 'blue'];
@@ -394,6 +445,35 @@ function PageStyleModal({ visible, appearance, onClose, onChange }: {
                   <Text style={styles.pageStyleOptionText}>{noteBackgroundLabels[background]}</Text>
                 </Pressable>
               ))}
+            </View>
+            <Text style={styles.pageStyleLabel}>CUSTOM COLOR</Text>
+            <View style={styles.customColorGrid}>
+              {customColors.map((color) => (
+                <Pressable
+                  key={color}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set page color ${color}`}
+                  accessibilityState={{ selected: (appearance.customBackgroundColor ?? '') === color }}
+                  onPress={() => { setCustomColorDraft(color); setCustomColor(color); }}
+                  style={[styles.customColorSwatch, { backgroundColor: color }, appearance.customBackgroundColor === color && styles.pageStyleOptionSelected]}
+                />
+              ))}
+            </View>
+            <View style={styles.customColorInputRow}>
+              <TextInput
+                accessibilityLabel="Custom page color hex value"
+                value={customColorDraft}
+                onChangeText={setCustomColorDraft}
+                onEndEditing={() => setCustomColor(customColorDraft)}
+                autoCapitalize="characters"
+                maxLength={7}
+                placeholder="#RRGGBB"
+                placeholderTextColor={palette.faint}
+                style={styles.customColorInput}
+              />
+              <Pressable accessibilityRole="button" onPress={() => setCustomColor(customColorDraft)} style={styles.pageStyleDoneButton}>
+                <Text style={styles.pageStyleDoneText}>Apply</Text>
+              </Pressable>
             </View>
             <Text style={styles.pageStyleLabel}>PAPER</Text>
             <View style={styles.pageStyleOptions}>
@@ -446,14 +526,20 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
 }) {
   const [busy, setBusy] = useState(false);
   const [imageUnavailable, setImageUnavailable] = useState(false);
+  const [imageSelected, setImageSelected] = useState(false);
+  const dragEnabledRef = useRef(false);
+  const [scalePreview, setScalePreview] = useState<number | null>(null);
   const imageAspect = image.width / image.height;
   const imageScale = Math.max(0.2, Math.min(1.5, image.scale ?? 1));
-  const requestedWidth = availableWidth * imageScale;
+  const displayedScale = scalePreview ?? imageScale;
+  const requestedWidth = availableWidth * displayedScale;
   const imageHeight = Math.min(requestedWidth / imageAspect, 480);
   const imageWidth = imageHeight * imageAspect;
   const [offset, setOffset] = useState({ x: image.offsetX ?? 0, y: image.offsetY ?? 0 });
   const offsetRef = useRef(offset);
   const dragOrigin = useRef(offset);
+  const scaleOrigin = useRef(imageScale);
+  const resizeCorners = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] as const;
   const clampOffset = (x: number, y: number) => ({
     x: Math.max(-0.5, Math.min(0.5, x)),
     y: Math.max(-1, Math.min(1, y)),
@@ -483,9 +569,54 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
       setBusy(false);
     }
   }, [blocks, image.id, onBlocksCommit]);
+  const persistScale = useCallback(async (nextScale: number) => {
+    const clamped = Math.round(Math.max(0.2, Math.min(1.5, nextScale)) * 100) / 100;
+    if (clamped === imageScale || busy) return;
+    setBusy(true);
+    try {
+      const saved = await onBlocksCommit(blocks.map((block) => block.id === image.id && block.type === 'image'
+        ? { ...block, scale: clamped }
+        : block));
+      if (!saved) throw new Error('Image size was not saved.');
+    } catch {
+      Alert.alert('Could not resize image', 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }, [blocks, busy, image.id, imageScale, onBlocksCommit]);
+
+  const resizeResponders = useMemo(() => {
+    const createResizeResponder = (corner: typeof resizeCorners[number]) => PanResponder.create({
+      onStartShouldSetPanResponder: () => !busy,
+      onMoveShouldSetPanResponder: (_event, gesture) => !busy && Math.hypot(gesture.dx, gesture.dy) > 2,
+      onPanResponderGrant: () => { scaleOrigin.current = imageScale; },
+      onPanResponderMove: (_event, gesture) => {
+        const horizontal = corner.endsWith('Right') ? gesture.dx : -gesture.dx;
+        const vertical = corner.startsWith('bottom') ? gesture.dy : -gesture.dy;
+        const delta = (horizontal + vertical) / Math.max(availableWidth * 1.7, 1);
+        setScalePreview(Math.max(0.2, Math.min(1.5, scaleOrigin.current + delta)));
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        const horizontal = corner.endsWith('Right') ? gesture.dx : -gesture.dx;
+        const vertical = corner.startsWith('bottom') ? gesture.dy : -gesture.dy;
+        const delta = (horizontal + vertical) / Math.max(availableWidth * 1.7, 1);
+        const next = Math.max(0.2, Math.min(1.5, scaleOrigin.current + delta));
+        setScalePreview(null);
+        void persistScale(next);
+      },
+      onPanResponderTerminate: () => setScalePreview(null),
+    });
+    return {
+      topLeft: createResizeResponder('topLeft'),
+      topRight: createResizeResponder('topRight'),
+      bottomLeft: createResizeResponder('bottomLeft'),
+      bottomRight: createResizeResponder('bottomRight'),
+    };
+  }, [availableWidth, busy, imageScale, persistScale]);
+
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_event, gesture) => !busy && Math.hypot(gesture.dx, gesture.dy) > 3,
+    onMoveShouldSetPanResponder: (_event, gesture) => dragEnabledRef.current && !busy && Math.hypot(gesture.dx, gesture.dy) > 3,
     onPanResponderGrant: () => { dragOrigin.current = offsetRef.current; },
     onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_event, gesture) => {
@@ -497,28 +628,27 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
       setOffset(next);
     },
     onPanResponderRelease: (_event, gesture) => {
-      void commitOffset(
+      dragEnabledRef.current = false;
+        void commitOffset(
         dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
         dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
       );
     },
     onPanResponderTerminate: () => {
-      offsetRef.current = dragOrigin.current;
+      dragEnabledRef.current = false;
+        offsetRef.current = dragOrigin.current;
       setOffset(dragOrigin.current);
     },
   }), [availableWidth, busy, commitOffset]);
 
-  const changeScale = async (delta: number) => {
-    const nextScale = Math.round(Math.max(0.2, Math.min(1.5, imageScale + delta)) * 100) / 100;
-    if (nextScale === imageScale || busy) return;
-    setBusy(true);
-    try {
-      await onBlocksCommit(blocks.map((block) => block.id === image.id && block.type === 'image'
-        ? { ...block, scale: nextScale }
-        : block));
-    } finally {
-      setBusy(false);
-    }
+  const handleImageLongPress = () => {
+    dragEnabledRef.current = true;
+    setImageSelected(true);
+  };
+
+  const closeImageSelection = () => {
+    dragEnabledRef.current = false;
+    setImageSelected(false);
   };
 
   const replaceImage = async () => {
@@ -551,7 +681,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
   };
 
   return (
-    <View style={styles.inlineImageCard}>
+    <View style={styles.inlineImageContainer}>
       {imageUnavailable ? (
         <View
           accessible
@@ -562,82 +692,89 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
           <Text style={styles.inlineImageUnavailableText}>Image unavailable on this device</Text>
         </View>
       ) : (
-        <Image
-          accessibilityLabel="Image in custom note"
-          source={{ uri: image.uri }}
-          resizeMode="contain"
-          onError={() => setImageUnavailable(true)}
-          style={{ width: imageWidth, height: imageHeight, alignSelf: 'center', transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }}
-        />
+        <View style={{ alignSelf: 'center', position: 'relative', width: imageWidth, height: imageHeight, transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Hold and drag to move image"
+            accessibilityActions={[
+              { name: 'moveLeft', label: 'Move image left' },
+              { name: 'moveRight', label: 'Move image right' },
+              { name: 'moveUp', label: 'Move image up' },
+              { name: 'moveDown', label: 'Move image down' },
+            ]}
+            onAccessibilityAction={({ nativeEvent }) => {
+              const current = offsetRef.current;
+              dragOrigin.current = current;
+              const step = 0.08;
+              void commitOffset(
+                current.x + (nativeEvent.actionName === 'moveRight' ? step : nativeEvent.actionName === 'moveLeft' ? -step : 0),
+                current.y + (nativeEvent.actionName === 'moveDown' ? step : nativeEvent.actionName === 'moveUp' ? -step : 0),
+              );
+            }}
+            onLongPress={handleImageLongPress}
+            delayLongPress={350}
+            disabled={busy}
+            {...panResponder.panHandlers}
+          >
+            <Image
+              accessibilityLabel="Image in custom note"
+              source={{ uri: image.uri }}
+              resizeMode="contain"
+              onError={() => setImageUnavailable(true)}
+              style={{ width: imageWidth, height: imageHeight, borderRadius: 8 }}
+            />
+          </Pressable>
+          {imageSelected ? resizeCorners.map((corner) => (
+            <View
+              key={corner}
+              accessible
+              accessibilityRole="adjustable"
+              accessibilityLabel={`Resize image from ${corner.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}`}
+              {...resizeResponders[corner].panHandlers}
+              style={[styles.inlineImageResizeHandle, corner === 'topLeft' ? styles.inlineImageResizeTopLeft : corner === 'topRight' ? styles.inlineImageResizeTopRight : corner === 'bottomLeft' ? styles.inlineImageResizeBottomLeft : styles.inlineImageResizeBottomRight]}
+            />
+          )) : null}
+        </View>
       )}
-      <View style={styles.inlineImageActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Drag to reposition this image"
-          accessibilityActions={[
-            { name: 'moveLeft', label: 'Move image left' },
-            { name: 'moveRight', label: 'Move image right' },
-            { name: 'moveUp', label: 'Move image up' },
-            { name: 'moveDown', label: 'Move image down' },
-          ]}
-          onAccessibilityAction={({ nativeEvent }) => {
-            const current = offsetRef.current;
-            dragOrigin.current = current;
-            const step = 0.08;
-            void commitOffset(
-              current.x + (nativeEvent.actionName === 'moveRight' ? step : nativeEvent.actionName === 'moveLeft' ? -step : 0),
-              current.y + (nativeEvent.actionName === 'moveDown' ? step : nativeEvent.actionName === 'moveUp' ? -step : 0),
-            );
-          }}
-          {...panResponder.panHandlers}
-          style={styles.inlineImageDragHandle}
-        >
-          <Text style={styles.inlineImageDragHandleText}>Drag to move</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Make image smaller"
-          disabled={busy || imageScale <= 0.2}
-          onPress={() => void changeScale(-0.15)}
-          style={styles.inlineImageAction}
-        >
-          <Text style={styles.inlineImageActionText}>Smaller</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Make image larger"
-          disabled={busy || imageScale >= 1.5}
-          onPress={() => void changeScale(0.15)}
-          style={styles.inlineImageAction}
-        >
-          <Text style={styles.inlineImageActionText}>Larger</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={() => void replaceImage()}
-          style={styles.inlineImageAction}
-        >
-          <Text style={styles.inlineImageActionText}>{busy ? 'Saving…' : 'Replace'}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={removeImage}
-          style={styles.inlineImageAction}
-        >
-          <Text style={styles.inlineImageRemoveText}>Remove</Text>
-        </Pressable>
-      </View>
+      {imageSelected ? (
+        <View style={styles.inlineImageActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Replace image"
+            disabled={busy}
+            onPress={() => void replaceImage()}
+            style={styles.inlineImageAction}
+          >
+            <Text style={styles.inlineImageActionText}>{busy ? 'Saving…' : 'Replace'}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remove image"
+            disabled={busy}
+            onPress={removeImage}
+            style={styles.inlineImageAction}
+          >
+            <Text style={styles.inlineImageRemoveText}>Remove</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Done editing image"
+            onPress={closeImageSelection}
+            style={styles.inlineImageAction}
+          >
+            <Text style={styles.inlineImageActionText}>Done</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor = palette.surface }: {
+function EmbeddedChecklistEditor({ noteId, block, onItemsChange, onRemove }: {
   noteId: string;
   block: EmbeddedChecklistBlock;
   onItemsChange: (items: EmbeddedChecklistItem[]) => void;
-  backgroundColor?: string;
+  onRemove: () => void;
 }) {
   const [newItemText, setNewItemText] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -657,13 +794,6 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
     const nextIndex = currentIndex + (actionName === 'moveUp' ? -1 : 1);
     if (currentIndex < 0 || nextIndex < 0 || nextIndex >= block.items.length) return;
     onItemsChange(reorderItem(block.items, itemId, nextIndex));
-  };
-
-  const saveItemEdit = (item: EmbeddedChecklistItem) => {
-    onItemsChange(editChecklistItemText(block.items, item.id, editingText));
-    setEditingItemId(null);
-    setEditingText('');
-    Keyboard.dismiss();
   };
 
   const renderItem = ({ item, drag, isActive }: RenderItemParams<EmbeddedChecklistItem>) => {
@@ -698,7 +828,12 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
             }} style={styles.itemActionButton}>
               <Text style={styles.mutedActionText}>Cancel</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => saveItemEdit(item)} style={[styles.itemActionButton, styles.itemSaveButton]}>
+            <Pressable accessibilityRole="button" onPress={() => {
+              onItemsChange(editChecklistItemText(block.items, item.id, editingText));
+              setEditingItemId(null);
+              setEditingText('');
+              Keyboard.dismiss();
+            }} style={[styles.itemActionButton, styles.itemSaveButton]}>
               <Text style={styles.itemSaveText}>Done</Text>
             </Pressable>
           </View>
@@ -707,7 +842,7 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
     }
 
     return (
-      <View style={[styles.checklistRow, isActive && styles.checklistRowActive]}>
+      <View style={[styles.embeddedChecklistRow, isActive && styles.checklistRowActive]}>
         <Pressable
           accessibilityRole="checkbox"
           accessibilityState={{ checked: item.checked }}
@@ -718,16 +853,14 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
           ]}
           onAccessibilityAction={(event) => moveByAccessibilityAction(item.id, event.nativeEvent.actionName)}
           onLongPress={drag}
-          delayLongPress={700}
+          delayLongPress={450}
           onPress={() => onItemsChange(toggleItem(block.items, item.id))}
-          style={({ pressed }) => [styles.checklistToggleArea, pressed && styles.rowPressed]}
+          style={({ pressed }) => [styles.embeddedChecklistToggleArea, pressed && styles.rowPressed]}
         >
-          <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
+          <View style={[styles.embeddedChecklistCheckbox, item.checked && styles.checkboxChecked]}>
             {item.checked ? <Text style={styles.checkmark}>✓</Text> : null}
           </View>
-          <Text style={[styles.checklistText, item.checked && styles.checklistTextChecked]}>
-            {item.text || 'Empty item'}
-          </Text>
+          <ChecklistItemLabel text={item.text} checked={item.checked} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -742,26 +875,18 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
   };
 
   return (
-    <View style={[styles.embeddedChecklist, { backgroundColor }]}>
-      <Text style={styles.embeddedChecklistLabel}>CHECKLIST</Text>
-      <NestableDraggableFlatList
-        data={block.items}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        onDragEnd={({ data }) => onItemsChange(normalizeItemPositions(data))}
-        autoscrollThreshold={40}
-        autoscrollSpeed={60}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="none"
-        renderPlaceholder={({ item }) => (
-          <View pointerEvents="none" style={[styles.checklistRow, styles.checklistPlaceholder]}>
-            <View style={styles.checkbox} />
-            <Text style={styles.checklistText}>{item.text || 'Empty item'}</Text>
-            <View style={styles.editItemButton} />
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.embeddedChecklistEmpty}>Add the first item below.</Text>}
-      />
+    <View style={styles.embeddedChecklist}>
+      {block.items.length > 0 ? (
+        <DraggableFlatList
+          data={block.items}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          onDragEnd={({ data }) => onItemsChange(normalizeItemPositions(data))}
+          activationDistance={4}
+          scrollEnabled={false}
+          keyboardShouldPersistTaps="always"
+        />
+      ) : null}
       <View style={styles.embeddedAddItemBar}>
         <TextInput
           accessibilityLabel="New checklist item"
@@ -769,7 +894,7 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
           onChangeText={setNewItemText}
           onSubmitEditing={({ nativeEvent }) => addItem(nativeEvent.text ?? newItemText)}
           submitBehavior="submit"
-          placeholder="Add an item"
+          placeholder="Add checklist item"
           placeholderTextColor={palette.faint}
           returnKeyType="done"
           style={styles.embeddedItemInput}
@@ -779,9 +904,12 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, backgroundColor
           accessibilityLabel="Add checklist item"
           disabled={!canAddChecklistItem(newItemText)}
           onPress={() => addItem(newItemText)}
-          style={({ pressed }) => [styles.addItemButton, pressed && styles.pressed, !canAddChecklistItem(newItemText) && styles.addItemDisabled]}
+          style={({ pressed }) => [styles.embeddedAddItemButton, pressed && styles.pressed, !canAddChecklistItem(newItemText) && styles.addItemDisabled]}
         >
-          <Text style={styles.addItemButtonText}>Add</Text>
+          <Text style={styles.embeddedAddItemButtonText}>+</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Remove checklist" onPress={onRemove} hitSlop={8} style={styles.embeddedRemoveButton}>
+          <Text style={styles.mutedActionText}>×</Text>
         </Pressable>
       </View>
     </View>

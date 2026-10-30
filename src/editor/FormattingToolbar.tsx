@@ -20,7 +20,8 @@ import {
   type FontSizeSelection,
 } from './formatting';
 import type { ParagraphSpacing } from '../types';
-import { palette } from '../theme';
+import { getThemeMode, palette, setThemeMode } from '../theme';
+import { FileImageIcon } from './FileImageIcon';
 
 type MenuName = 'font' | 'size' | 'color' | 'overflow' | 'alignment' | 'spacing' | null;
 type ColorKind = 'text' | 'highlight';
@@ -46,7 +47,7 @@ interface FormattingToolbarProps {
 const textColors = [
   { label: 'Default', color: null, swatch: '#FFFFFF' },
   { label: 'Ink', color: '#242923', swatch: '#242923' },
-  { label: 'Forest', color: '#366A52', swatch: '#366A52' },
+  { label: 'Slate blue', color: '#536F9F', swatch: '#536F9F' },
   { label: 'Terracotta', color: '#A0443A', swatch: '#A0443A' },
   { label: 'Blue', color: '#2F6D9E', swatch: '#2F6D9E' },
   { label: 'Plum', color: '#78558A', swatch: '#78558A' },
@@ -55,7 +56,7 @@ const textColors = [
 const highlightColors = [
   { label: 'None', color: null, swatch: '#FFFFFF' },
   { label: 'Butter', color: '#FFF1A8', swatch: '#FFF1A8' },
-  { label: 'Sage', color: '#DDEDD8', swatch: '#DDEDD8' },
+  { label: 'Lavender blue', color: '#E1E9F8', swatch: '#E1E9F8' },
   { label: 'Sky', color: '#DCEBFA', swatch: '#DCEBFA' },
   { label: 'Blush', color: '#FBE1E5', swatch: '#FBE1E5' },
 ] as const;
@@ -188,6 +189,9 @@ export function FormattingToolbar({
           </View>
         </ToolbarButton>
         <View style={styles.separator} />
+        <ToolbarButton label="Choose image from gallery" disabled={false} onPress={onInsertImage}>
+          <FileImageIcon color={palette.ink} />
+        </ToolbarButton>
         <ToolbarButton label="More formatting" selected={menu === 'overflow'} disabled={disabled} onPress={() => showMenu('overflow')}>
           <Text style={styles.moreGlyph}>•••</Text>
         </ToolbarButton>
@@ -327,8 +331,7 @@ export function FormattingToolbar({
           <View style={styles.menuSection}>
             <Text style={styles.menuTitle}>Insert</Text>
             <View style={styles.actionsRow}>
-              <ActionOption label="Checklist" onPress={() => { onInsertChecklist(); setMenu(null); }} />
-              <ActionOption label="Image" onPress={() => { onInsertImage(); setMenu(null); }} />
+              <ActionOption label="Checklist" accessibilityLabel="Insert checklist at the cursor" onPress={() => { onInsertChecklist(); setMenu(null); }} />
               <ActionOption label="Page style" onPress={() => { onOpenPageStyle(); setMenu(null); }} />
               <ActionOption label="Undo" onPress={() => runEditorCommand((editor) => editor.undo())} />
               <ActionOption label="Redo" onPress={() => runEditorCommand((editor) => editor.redo())} />
@@ -384,11 +387,11 @@ export function FormattingToolbar({
   );
 }
 
-function ActionOption({ label, selected = false, onPress }: { label: string; selected?: boolean; onPress: () => void }) {
+function ActionOption({ label, accessibilityLabel, selected = false, onPress }: { label: string; accessibilityLabel?: string; selected?: boolean; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected }}
       onPress={onPress}
       style={[styles.actionOption, selected && styles.optionSelected]}
@@ -398,7 +401,7 @@ function ActionOption({ label, selected = false, onPress }: { label: string; sel
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   container: {
     flexShrink: 0,
     backgroundColor: palette.surface,
@@ -470,6 +473,12 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 20,
     letterSpacing: 1,
+  },
+  galleryGlyph: {
+    color: palette.ink,
+    fontSize: 25,
+    lineHeight: 30,
+    fontWeight: '500',
   },
   separator: {
     width: StyleSheet.hairlineWidth,
@@ -629,3 +638,15 @@ const styles = StyleSheet.create({
     opacity: 0.42,
   },
 });
+
+const originalThemeMode = getThemeMode();
+setThemeMode('light');
+const lightStyles = createStyles();
+setThemeMode('dark');
+const darkStyles = createStyles();
+setThemeMode(originalThemeMode);
+const styles = new Proxy(lightStyles, {
+  get(_target, property) {
+    return Reflect.get(getThemeMode() === 'dark' ? darkStyles : lightStyles, property);
+  },
+}) as typeof lightStyles;

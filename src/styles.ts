@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { palette } from './theme';
+import { getThemeMode, palette, setThemeMode } from './theme';
 
-export const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   gestureRoot: {
     flex: 1,
   },
@@ -48,7 +48,7 @@ export const styles = StyleSheet.create({
     gap: 5,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#D7E4D9',
+    borderColor: palette.line,
     backgroundColor: palette.accentSoft,
   },
   reminderHomeLabel: {
@@ -167,6 +167,20 @@ export const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: palette.line,
   },
+  noteRowPinned: {
+    backgroundColor: palette.accentSoft,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    // Pinned cards use a soft surface tint and shadow, never an outline.
+    borderWidth: 0,
+    borderBottomWidth: 0,
+    shadowColor: palette.accent,
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
   noteRowMain: {
     flex: 1,
     justifyContent: 'center',
@@ -180,6 +194,17 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  pinnedGlyph: {
+    color: palette.accent,
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  noteTitleWithReminder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
   },
   noteTitle: {
     flexShrink: 1,
@@ -204,6 +229,14 @@ export const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 7,
   },
+  pinRowButton: {
+    minWidth: 48, height: 34, paddingHorizontal: 10,
+    borderRadius: 11, borderWidth: 1, borderColor: palette.line,
+    backgroundColor: palette.surface, alignSelf: 'center',
+    justifyContent: 'center', alignItems: 'center', marginRight: 2,
+  },
+  pinRowGlyph: { color: palette.muted, fontSize: 12, fontWeight: '600' },
+  pinRowGlyphActive: { color: palette.ink },
   deleteRowButton: {
     width: 48,
     minHeight: 48,
@@ -332,7 +365,7 @@ export const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#D7E4D9',
+    borderColor: palette.line,
     backgroundColor: palette.accentSoft,
   },
   reminderHeaderText: {
@@ -379,11 +412,45 @@ export const styles = StyleSheet.create({
     marginHorizontal: -22,
   },
   documentToolbar: {
+    position: 'relative',
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: 4,
+    paddingHorizontal: 4,
     paddingBottom: 6,
   },
+  quickToolbarButton: {
+    minWidth: 42, height: 40, paddingHorizontal: 7, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth,
+  },
+  documentToolbarLight: { backgroundColor: 'rgba(255,255,255,0.88)', borderColor: 'rgba(20,20,20,0.07)', borderWidth: StyleSheet.hairlineWidth, borderRadius: 15, paddingHorizontal: 6, paddingTop: 4, marginBottom: 6 },
+  documentToolbarDark: { backgroundColor: '#292C2A', borderColor: 'rgba(255,255,255,0.08)', borderWidth: StyleSheet.hairlineWidth, borderRadius: 15, paddingHorizontal: 6, paddingTop: 4, marginBottom: 6 },
+  quickToolbarButtonLight: { backgroundColor: 'rgba(255,255,255,0.72)', borderColor: 'rgba(25,25,25,0.04)' },
+  quickToolbarButtonDark: { backgroundColor: '#333735', borderColor: 'rgba(255,255,255,0.04)' },
+  quickToolbarTextLight: { color: '#202220' },
+  quickToolbarTextDark: { color: '#F4F5F3' },
+  quickSizeButton: { minWidth: 50 },
+  quickToolbarAa: { fontSize: 17, fontWeight: '700' },
+  quickToolbarSize: { fontSize: 14, fontWeight: '600' },
+  quickToolbarGlyph: { fontSize: 21, fontWeight: '500' },
+  quickImageGlyph: { fontSize: 21, fontWeight: '500' },
+  quickColorDot: { width: 21, height: 21, borderRadius: 11, borderWidth: 1, borderColor: palette.line },
+  quickPopover: { position: 'absolute', zIndex: 20, top: 46, left: 45, right: 42, flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 10, borderRadius: 12, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line, elevation: 5 },
+  quickSizeChoice: { minWidth: 38, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  quickSizeChoiceSelected: { backgroundColor: palette.accentSoft },
+  quickSizeChoiceText: { color: palette.ink, fontSize: 13, fontWeight: '600' },
+  quickColorBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 24 },
+  quickColorPanel: { backgroundColor: palette.surface, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: palette.line },
+  quickColorTitle: { color: palette.ink, fontSize: 16, fontWeight: '700', marginBottom: 14 },
+  quickColorGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 9 },
+  quickColorSwatch: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(36,41,35,0.18)' },
+  quickColorWhiteSwatch: { borderWidth: 1, borderColor: palette.muted },
+  quickAlphaRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  quickAlphaChoice: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: 1, borderColor: palette.line },
+  quickAlphaChoiceSelected: { borderColor: palette.accent, backgroundColor: palette.accentSoft },
+  quickColorHint: { color: palette.muted, fontSize: 12, marginTop: 14 },
   pageStyleButton: {
     marginLeft: 'auto',
   },
@@ -434,7 +501,7 @@ export const styles = StyleSheet.create({
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.line,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
   },
   richFormattingLabel: {
     color: palette.muted,
@@ -525,6 +592,10 @@ export const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 8,
   },
+  customColorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 16 },
+  customColorSwatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: palette.line },
+  customColorInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  customColorInput: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: palette.line, borderRadius: 11, paddingHorizontal: 12, color: palette.ink, backgroundColor: palette.surface },
   pageStyleOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -569,13 +640,10 @@ export const styles = StyleSheet.create({
     color: palette.accent,
     fontWeight: '700',
   },
-  inlineImageCard: {
+  inlineImageContainer: {
     marginVertical: 10,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: palette.line,
-    borderRadius: 16,
-    backgroundColor: palette.surface,
+    paddingVertical: 4,
+    alignSelf: 'stretch',
   },
   inlineImageUnavailable: {
     alignSelf: 'center',
@@ -590,6 +658,21 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  inlineImageResizeHandle: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: palette.surface,
+    backgroundColor: palette.accent,
+    zIndex: 6,
+    elevation: 4,
+  },
+  inlineImageResizeTopLeft: { top: -9, left: -9 },
+  inlineImageResizeTopRight: { top: -9, right: -9 },
+  inlineImageResizeBottomLeft: { bottom: -9, left: -9 },
+  inlineImageResizeBottomRight: { bottom: -9, right: -9 },
   inlineImageActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -628,43 +711,64 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
   },
   embeddedChecklist: {
-    marginVertical: 10,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
+    marginVertical: 2,
+    paddingVertical: 0,
   },
-  embeddedChecklistLabel: {
-    color: palette.accent,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    paddingBottom: 4,
-  },
-  embeddedChecklistEmpty: {
-    color: palette.faint,
-    fontSize: 13,
-    lineHeight: 20,
-    paddingVertical: 10,
-  },
-  embeddedAddItemBar: {
-    minHeight: 48,
+  embeddedChecklistRow: {
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: palette.line,
-    marginTop: 4,
-    paddingTop: 4,
+  },
+  embeddedChecklistToggleArea: {
+    flex: 1,
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingRight: 8,
+  },
+  embeddedChecklistCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.4,
+    borderColor: palette.faint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 9,
+    flexShrink: 0,
+  },
+  embeddedAddItemBar: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
   embeddedItemInput: {
     flex: 1,
-    minHeight: 44,
-    paddingVertical: 8,
+    minHeight: 36,
+    paddingVertical: 5,
     color: palette.ink,
     fontSize: 15,
+  },
+  embeddedAddItemButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+  },
+  embeddedAddItemButtonText: {
+    color: palette.accent,
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '500',
+  },
+  embeddedRemoveButton: {
+    width: 28,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listEditor: {
     flex: 1,
@@ -681,6 +785,9 @@ export const styles = StyleSheet.create({
   itemsContent: {
     flexGrow: 1,
     paddingBottom: 12,
+  },
+  itemsContentKeyboard: {
+    paddingBottom: 280,
   },
   checklistRow: {
     minHeight: 60,
@@ -707,18 +814,20 @@ export const styles = StyleSheet.create({
     minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingRight: 8,
+    paddingVertical: 14,
+    paddingRight: 10,
   },
   checkbox: {
     width: 23,
     height: 23,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#AEB3A9',
+    borderColor: palette.faint,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 13,
+    marginTop: 0,
+    flexShrink: 0,
   },
   checkboxChecked: {
     borderColor: palette.accent,
@@ -730,8 +839,12 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '700',
   },
-  checklistText: {
+  checklistLabelWrap: {
     flex: 1,
+    minWidth: 0,
+    position: 'relative',
+  },
+  checklistText: {
     color: palette.ink,
     fontSize: 16,
     lineHeight: 23,
@@ -851,7 +964,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 14,
-    backgroundColor: '#F0EFE9',
+    backgroundColor: palette.background,
   },
   trashShortcutText: {
     flex: 1,
@@ -861,12 +974,14 @@ export const styles = StyleSheet.create({
   },
   trashShortcutCount: {
     minWidth: 24,
-    paddingVertical: 3,
+    height: 22,
     paddingHorizontal: 7,
     overflow: 'hidden',
     textAlign: 'center',
+    textAlignVertical: 'center',
     color: palette.muted,
     fontSize: 11,
+    lineHeight: 14,
     fontWeight: '700',
     borderRadius: 10,
     backgroundColor: palette.surface,
@@ -973,3 +1088,15 @@ export const styles = StyleSheet.create({
     opacity: 0.76,
   },
 });
+
+const originalThemeMode = getThemeMode();
+setThemeMode('light');
+const lightStyles = createStyles();
+setThemeMode('dark');
+const darkStyles = createStyles();
+setThemeMode(originalThemeMode);
+export const styles = new Proxy(lightStyles, {
+  get(_target, property) {
+    return Reflect.get(getThemeMode() === 'dark' ? darkStyles : lightStyles, property);
+  },
+}) as typeof lightStyles;

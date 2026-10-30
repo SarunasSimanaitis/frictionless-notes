@@ -11,16 +11,13 @@ import { createReminder, dateAtTime, nextAfterWorkDate, selectPrimaryNoteReminde
 import { cancelReminderNotifications, checkNotificationPermission, requestNotificationPermission, syncReminderNotification } from './notifications';
 import type { AppPreferences, Note, Reminder } from './types';
 import type { NotificationPermission } from './notifications';
-
-const palette = {
-  background: '#F7F6F1', surface: '#FFFFFF', ink: '#242923', muted: '#74796F',
-  faint: '#9A9D95', line: '#E7E7DF', accent: '#366A52', accentSoft: '#E8F0E9', danger: '#A0443A',
-};
+import { getThemeMode, palette, setThemeMode } from './theme';
 
 interface ReminderModalProps {
   repository: NotesRepository;
   visible: boolean;
   note: Note | null;
+  notes?: Note[];
   reminders: Reminder[];
   preferences: AppPreferences;
   permission: NotificationPermission;
@@ -51,7 +48,7 @@ function mergeDateTime(current: Date, chosen: Date, mode: 'date' | 'time'): Date
 }
 
 export function ReminderModal({
-  repository, visible, note, reminders, preferences, permission,
+  repository, visible, note, notes = [], reminders, preferences, permission,
   onClose, onRemindersChanged, onPermissionChanged,
 }: ReminderModalProps) {
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
@@ -67,10 +64,11 @@ export function ReminderModal({
       const primary = selectPrimaryNoteReminder(reminders, note.id);
       return primary ? [primary] : [];
     }
+    const activeNoteIds = new Set(notes.map((candidate) => candidate.id));
     return reminders
-      .filter((reminder) => reminder.noteId === null)
+      .filter((reminder) => reminder.noteId === null || activeNoteIds.has(reminder.noteId))
       .sort((a, b) => a.scheduledAt - b.scheduledAt);
-  }, [reminders, note]);
+  }, [reminders, note, notes]);
 
   const openNewReminder = () => {
     const initial = nextAfterWorkDate(new Date(), preferences.afterWorkTime) ?? new Date(Date.now() + 3_600_000);
@@ -335,13 +333,14 @@ export function ReminderModal({
               <DateTimePicker
                 value={scheduledDate}
                 mode={pickerMode}
-                display="default"
+                display={pickerMode === 'time' ? 'spinner' : 'default'}
                 minimumDate={pickerMode === 'date' ? new Date() : undefined}
-                onChange={(_, chosen) => {
+                onValueChange={(_, chosen) => {
                   const mode = pickerMode;
                   setPickerMode(null);
                   if (chosen && mode) setScheduledDate((current) => mergeDateTime(current, chosen, mode));
                 }}
+                onDismiss={() => setPickerMode(null)}
               />
             ) : null}
             <Text style={styles.scheduleHint}>Uses your device’s local time. Notifications can be delayed by Android battery settings.</Text>
@@ -363,7 +362,7 @@ export function ReminderModal({
           </ScrollView>
         ) : (
           <View style={styles.manager}>
-            <Text style={styles.contextTitle}>{note?.title || 'Quick reminders'}</Text>
+            <Text style={styles.contextTitle}>{note?.title || 'All reminders'}</Text>
             <Text style={styles.contextDescription}>
               {listedReminders.length ? 'Saved on this device.' : 'Add a reminder when you want a nudge.'}
             </Text>
@@ -405,6 +404,7 @@ export function ReminderModal({
                     <View style={styles.reminderCardTop}>
                       <Pressable accessibilityRole="button" onPress={() => openExistingReminder(reminder)} style={styles.reminderCopy}>
                         <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                        {!note && reminder.noteId ? <Text style={styles.reminderDate}>Note: {notes.find((candidate) => candidate.id === reminder.noteId)?.title || 'Untitled note'}</Text> : null}
                         <Text style={styles.reminderDate}>{formatDateTime(reminder.scheduledAt)}</Text>
                         <Text style={[styles.reminderStatus, !reminder.enabled && styles.disabledStatus]}>{stateLabel}</Text>
                       </Pressable>
@@ -455,7 +455,7 @@ function PresetButton({ title, onPress, wide = false }: { title: string; onPress
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { minHeight: 58, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerAction: { minWidth: 88, minHeight: 48, flexDirection: 'row', alignItems: 'center' },
@@ -465,8 +465,8 @@ const styles = StyleSheet.create({
   manager: { flex: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 18 },
   contextTitle: { color: palette.ink, fontSize: 19, fontWeight: '700' },
   contextDescription: { color: palette.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
-  permissionBanner: { padding: 13, marginTop: 14, borderRadius: 13, backgroundColor: '#F4EBDD' },
-  permissionBannerText: { color: '#77572D', fontSize: 13, lineHeight: 19 },
+  permissionBanner: { padding: 13, marginTop: 14, borderRadius: 13, backgroundColor: palette.accentSoft },
+  permissionBannerText: { color: palette.ink, fontSize: 13, lineHeight: 19 },
   permissionLink: { color: palette.accent, fontSize: 13, fontWeight: '700', marginTop: 8 },
   reminderList: { flex: 1, marginTop: 14 },
   reminderListContent: { paddingBottom: 16 },
@@ -504,3 +504,15 @@ const styles = StyleSheet.create({
   dimmed: { opacity: 0.5 },
   pressed: { opacity: 0.75 },
 });
+
+const originalThemeMode = getThemeMode();
+setThemeMode('light');
+const lightStyles = createStyles();
+setThemeMode('dark');
+const darkStyles = createStyles();
+setThemeMode(originalThemeMode);
+const styles = new Proxy(lightStyles, {
+  get(_target, property) {
+    return Reflect.get(getThemeMode() === 'dark' ? darkStyles : lightStyles, property);
+  },
+}) as typeof lightStyles;

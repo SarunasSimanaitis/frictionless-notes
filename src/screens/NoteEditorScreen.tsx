@@ -53,15 +53,10 @@ export function NoteEditorScreen({
   const [saveFailed, setSaveFailed] = useState(false);
   const pendingListSaves = useRef(0);
   const pendingTextSaves = useRef(0);
-  const listSaveWaiters = useRef<Array<() => void>>([]);
 
   const [remindersOpen, setRemindersOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingSave = () => pendingListSaves.current > 0 || pendingTextSaves.current > 0 || saveTimer.current !== null;
-  const waitForListSaves = useCallback(() => new Promise<void>((resolve) => {
-    if (pendingListSaves.current === 0) resolve();
-    else listSaveWaiters.current.push(resolve);
-  }), []);
   const noteRef = useRef(initialNote);
   const appState = useRef(AppState.currentState);
   const bodyRef = useRef<TextInputInstance>(null);
@@ -148,9 +143,6 @@ export function NoteEditorScreen({
   const finishListSave = useCallback((persistedNote: Note | null, success: boolean) => {
     const pending = Math.max(0, pendingListSaves.current - 1);
     pendingListSaves.current = pending;
-    if (pending === 0) {
-      for (const resolve of listSaveWaiters.current.splice(0)) resolve();
-    }
     if (persistedNote) {
       const current = noteRef.current;
       const merged = {
@@ -169,17 +161,20 @@ export function NoteEditorScreen({
   }, [onSaved]);
 
   useEffect(() => {
+    let leaving = false;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      void (async () => {
-        await waitForListSaves();
-        await persistCurrent();
-        Keyboard.dismiss();
-        onBack();
-      })();
+      if (leaving) return true;
+      leaving = true;
+      // Never hold Android back hostage to a checklist write or debounced save.
+      // Start a best-effort flush first, then leave immediately; the repository
+      // persists checklist rows independently and SQLite serializes its writes.
+      void persistCurrent();
+      Keyboard.dismiss();
+      onBack();
       return true;
     });
     return () => subscription.remove();
-  }, [onBack, persistCurrent, waitForListSaves]);
+  }, [onBack, persistCurrent]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -198,9 +193,10 @@ export function NoteEditorScreen({
     };
   }, []);
 
-  const leaveEditor = async () => {
-    await waitForListSaves();
-    await persistCurrent();
+  const leaveEditor = () => {
+    // Navigation must stay responsive even if a native SQLite operation stalls.
+    // persistCurrent synchronously captures the latest draft before its first await.
+    void persistCurrent();
     Keyboard.dismiss();
     onBack();
   };
@@ -208,12 +204,13 @@ export function NoteEditorScreen({
   const confirmDelete = () => {
     Alert.alert('Move to Trash?', 'This note will stay in Trash for 30 days before it is automatically deleted.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Move to Trash', style: 'destructive', onPress: () => void (async () => {
-        await waitForListSaves();
-        await persistCurrent();
+      { text: 'Move to Trash', style: 'destructive', onPress: () => {
+        // App-level deletion persists the latest note snapshot before moving it.
+        // Do not await pending checklist saves here: a stalled save must not trap
+        // the user inside a note or make the Trash action appear unresponsive.
         Keyboard.dismiss();
         onDelete(noteRef.current);
-      })() },
+      } },
     ]);
   };
 
@@ -227,7 +224,7 @@ export function NoteEditorScreen({
       behavior={Platform.OS === 'web' ? undefined : 'padding'}
     >
       <SafeAreaView style={styles.screen}>
-        <StatusBar style="dark" />
+        <StatusBar style={preferences.themeMode === 'dark' ? 'light' : 'dark'} />
         <View style={styles.editorHeader}>
           <BackButton
             label="Notes"
@@ -277,6 +274,8 @@ export function NoteEditorScreen({
               onBlocksChange={(blocks) => updateDraft({ blocks })}
               onBlocksCommit={persistBlocksImmediately}
               onAppearanceChange={(appearance) => updateDraft({ appearance })}
+              quickNoteToolbarMode={preferences.quickNoteToolbarMode}
+              themeMode={preferences.themeMode}
             />
           ) : (
             <ChecklistEditor

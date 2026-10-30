@@ -10,6 +10,7 @@ export const databaseSchema = `
     blocks_json TEXT,
     appearance_json TEXT,
     deleted_at INTEGER,
+    is_pinned INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -60,6 +61,9 @@ export async function runDatabaseMigrations(database: SchemaDatabase): Promise<v
   }
   if (!noteColumns.some((column) => column.name === 'deleted_at')) {
     await database.execAsync('ALTER TABLE notes ADD COLUMN deleted_at INTEGER');
+  }
+  if (!noteColumns.some((column) => column.name === 'is_pinned')) {
+    await database.execAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0');
   }
   await database.execAsync('CREATE INDEX IF NOT EXISTS notes_deleted_at_idx ON notes(deleted_at)');
 }

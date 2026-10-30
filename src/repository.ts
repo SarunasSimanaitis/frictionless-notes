@@ -12,6 +12,7 @@ export interface NotesRepository {
   saveChecklistItem(item: ChecklistItem, updatedAt: number): Promise<void>;
   deleteChecklistItem(itemId: string, noteId: string, updatedAt: number): Promise<void>;
   saveItemOrder(noteId: string, items: ChecklistItem[], updatedAt: number): Promise<void>;
+  replaceChecklistItems(noteId: string, items: ChecklistItem[], updatedAt: number): Promise<void>;
   loadReminders(noteId?: string): Promise<Reminder[]>;
   saveReminder(reminder: Reminder): Promise<void>;
   setReminderNotificationId(reminderId: string, notificationId: string | null): Promise<void>;

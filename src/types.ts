@@ -14,6 +14,9 @@ export interface NoteAppearance {
   paper: PaperStyle;
   margin: NoteMargin;
   font: NoteFont;
+  customBackgroundColor?: string;
+  quickFontSize?: number;
+  quickTextColor?: string;
 }
 
 export interface ChecklistItem {
@@ -68,6 +71,7 @@ export interface Note {
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
+  isPinned: boolean;
   items: ChecklistItem[];
 }
 
@@ -86,4 +90,7 @@ export interface Reminder {
 export interface AppPreferences {
   remindersEnabled: boolean;
   afterWorkTime: string;
+  highlightPinnedNotes: boolean;
+  themeMode: 'light' | 'dark';
+  quickNoteToolbarMode: 'simple' | 'advanced';
 }

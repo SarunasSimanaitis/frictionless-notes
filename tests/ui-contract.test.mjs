@@ -36,18 +36,43 @@ const draggableFlatListSource = readFileSync(new URL('../node_modules/react-nati
 const cellRendererSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/CellRendererComponent.tsx', import.meta.url), 'utf8');
 const nestableDraggableFlatListSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx', import.meta.url), 'utf8');
 
+test('embedded checklists can be removed without discarding the rest of the note', () => {
+  assert.match(textDocumentSource, /accessibilityLabel="Remove checklist"/);
+  assert.match(textDocumentSource, /const nextBlocks = note\.blocks\.filter\(\(candidate\) => candidate\.id !== block\.id\)/);
+  assert.match(textDocumentSource, /onBlocksChange\(nextBlocks\.length \? nextBlocks : \[\{ id: createId\(\), type: 'paragraph', text: '' \}\]\)/);
+});
+
+test('reminders from notes appear in the global manager and are associated with their note', () => {
+  assert.match(homeScreenSource, /notes=\{notes\}[\s\S]*?reminders=\{reminders\}/);
+  assert.match(reminderSource, /reminder\.noteId === null \|\| activeNoteIds\.has\(reminder\.noteId\)/);
+  assert.match(reminderSource, /Note: \{notes\.find\(\(candidate\) => candidate\.id === reminder\.noteId\)/);
+  assert.match(homeScreenSource, /const remindersByNote = useMemo\(\(\) => \{/);
+  assert.match(homeScreenSource, /grouped\.get\(reminder\.noteId\)/);
+  assert.match(homeScreenSource, /grouped\.set\(reminder\.noteId, \[reminder\]\)/);
+  assert.match(homeScreenSource, /reminders=\{remindersByNote\.get\(item\.id\) \?\? EMPTY_REMINDERS\}/);
+  assert.match(homeScreenSource, /reminders\.some\(\(reminder\) => reminder\.enabled\) \? palette\.accent : palette\.faint/);
+});
+
+test('Android back from Trash returns to Notes instead of exiting the app', () => {
+  assert.match(homeScreenSource, /BackHandler\.addEventListener\('hardwareBackPress'/);
+  assert.match(homeScreenSource, /setShowTrash\(false\);[\s\S]*?return true;/);
+});
+
 test('the checklist input stays in a keyboard-aware flex layout below its independently scrolling list', () => {
   assert.equal(appConfig.expo.android.softwareKeyboardLayoutMode, 'resize');
   assert.match(noteEditorSource, /behavior=\{Platform\.OS === 'web' \? undefined : 'padding'\}/);
   assert.match(checklistEditorSource, /<DraggableFlatList[\s\S]*?data=\{note\.items\}[\s\S]*?style=\{styles\.itemsScroll\}/);
-  assert.match(checklistEditorSource, /<Text style=\{\[styles\.checklistText,[\s\S]*?\{item\.text \|\| 'Empty item'\}/);
+  assert.match(checklistEditorSource, /<ChecklistItemLabel text=\{item\.text\} checked=\{item\.checked\} \/>/);
+  assert.match(readFileSync(new URL('../src/lists/ChecklistItemLabel.tsx', import.meta.url), 'utf8'), /textDecorationLine: checked \? 'line-through' : 'none'/);
   assert.match(stylesSource, /itemsContent:\s*\{\s*flexGrow:\s*1/);
   assert.match(appSource, /<GestureHandlerRootView style=\{styles\.gestureRoot\}>/);
   assert.match(stylesSource, /gestureRoot:\s*\{\s*flex:\s*1/);
   assert.match(checklistEditorSource, /<View style=\{styles\.addItemBar\}>[\s\S]*?accessibilityLabel="New list item"/);
   assert.match(stylesSource, /itemsScroll:\s*\{\s*flex:\s*1/);
   assert.doesNotMatch(stylesSource, /addItemBar:\s*\{[^}]*position:\s*'absolute'/s);
-  assert.doesNotMatch(noteEditorSource, /keyboardHeight|keyboardHeightOffset|keyboardDidShow/);
+  assert.match(checklistEditorSource, /Keyboard\.addListener\('keyboardDidShow'/);
+  assert.match(checklistEditorSource, /scrollToIndex\(\{ index, animated: true, viewPosition: 0\.28 \}\)/);
+  assert.match(stylesSource, /itemsContentKeyboard:\s*\{\s*paddingBottom:\s*280/);
 });
 
 test('item submission keeps the input focused and accepts taps while the keyboard is open', () => {
@@ -98,16 +123,22 @@ test('Quick and Custom Notes stay distinct while sharing the structured offline 
 
 test('ordinary notes insert a checklist at the focused cursor and retain text as ordered blocks', () => {
   assert.match(noteEditorSource, /<TextDocumentEditor[\s\S]*?onBlocksChange=\{\(blocks\) => updateDraft\(\{ blocks \}\)\}/);
-  assert.match(textDocumentSource, /accessibilityLabel="Insert checklist at the cursor"/);
-  assert.match(formattingToolbarSource, /ActionOption label="Checklist" onPress=\{\(\) => \{ onInsertChecklist\(\)/);
+  assert.match(formattingToolbarSource, /ActionOption label="Checklist" accessibilityLabel="Insert checklist at the cursor" onPress=\{\(\) => \{ onInsertChecklist\(\)/);
   assert.match(textDocumentSource, /onSelectionChange=\{\(\{ nativeEvent \}\) =>/);
   assert.match(textDocumentSource, /insertChecklistBlockAtSelection\([\s\S]*?createId\(\),[\s\S]*?createId\(\),/);
   assert.match(textDocumentSource, /focusAfterInsert\.current = result\.focusParagraphId/);
-  assert.match(textDocumentSource, /<NestableScrollContainer[\s\S]*?keyboardShouldPersistTaps="always"/);
+  assert.match(textDocumentSource, /<ScrollView[\s\S]*?keyboardShouldPersistTaps="always"/);
   assert.match(textDocumentSource, /<EmbeddedChecklistEditor[\s\S]*?onItemsChange=/);
-  assert.match(embeddedChecklistSource, /<NestableDraggableFlatList[\s\S]*?keyExtractor=\{\(item\) => item\.id\}/);
-  assert.match(embeddedChecklistSource, /onLongPress=\{drag\}[\s\S]*?delayLongPress=\{700\}/);
+  assert.match(embeddedChecklistSource, /<DraggableFlatList[\s\S]*?data=\{block\.items\}[\s\S]*?onDragEnd=\{\(\{ data \}\) => onItemsChange\(normalizeItemPositions\(data\)\)\}/);
+  assert.match(embeddedChecklistSource, /accessibilityActions\s*=\s*\{\s*\[/);
+  assert.ok(embeddedChecklistSource.includes("label: 'Move item up'"));
+  assert.ok(embeddedChecklistSource.includes("label: 'Move item down'"));
+  assert.match(embeddedChecklistSource, /onAccessibilityAction=\{\(event\) => moveByAccessibilityAction\(item\.id, event\.nativeEvent\.actionName\)\}/);
+  assert.match(embeddedChecklistSource, /onItemsChange\(reorderItem\(block\.items, itemId, nextIndex\)\)/);
+  assert.match(embeddedChecklistSource, /onLongPress=\{drag\}/);
   assert.match(embeddedChecklistSource, /onPress=\{\(\) => onItemsChange\(toggleItem\(block\.items, item\.id\)\)\}/);
+  assert.match(stylesSource, /embeddedChecklistRow:\s*\{\s*minHeight: 38/);
+  assert.doesNotMatch(embeddedChecklistSource, /embeddedChecklistHeader|embeddedChecklistLabel/);
   assert.match(embeddedChecklistSource, /accessibilityLabel=\{`Edit \$\{item\.text \|\| 'list item'\}`\}/);
   assert.match(schemaSource, /blocks_json TEXT/);
   assert.match(databaseSource, /readNoteBlocks\(row\.blocks_json, row\.body, row\.id\)/);
@@ -118,7 +149,8 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.equal(packageJson.dependencies['@10play/tentap-editor'], '^1.1.0');
   assert.equal(packageJson.dependencies['react-native-webview'], '14.0.1');
   assert.match(documentEditorSource, /import \{[\s\S]*RichText, TenTapStartKit, useBridgeState, useEditorBridge,[\s\S]*\} from '@10play\/tentap-editor'/);
-  assert.match(textDocumentSource, /isCustom \? \([\s\S]*?<RichParagraphEditor/);
+  assert.match(textDocumentSource, /const usesRichText = isCustom \|\| \(note\.type === 'text' && quickNoteToolbarMode === 'advanced'\)/);
+  assert.match(textDocumentSource, /usesRichText \? \([\s\S]*?<RichParagraphEditor/);
   assert.match(textDocumentSource, /<FormattingToolbar/);
   assert.match(textDocumentSource, /customSource: editorHtml/);
   assert.match(textDocumentSource, /PageStyleModal/);
@@ -136,8 +168,9 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(editorViteConfigSource, /replacement: '@10play\/tentap-editor\/web'/);
   assert.match(customNoteCssSource, /font-size:20px/);
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
-  assert.match(textDocumentSource, /Make image smaller/);
-  assert.match(textDocumentSource, /Make image larger/);
+  assert.match(textDocumentSource, /resizeCorners\.map\(\(corner\) =>/);
+  assert.match(textDocumentSource, /Drag corner to resize image|Resize image from/);
+  assert.doesNotMatch(textDocumentSource, /Make image smaller|Make image larger|>Smaller<|>Larger</);
   assert.doesNotMatch(textDocumentSource, /inlineImageMoveControls|inlineImageMoveGlyph/);
   assert.match(backButtonSource, /appStyles\.backArrow/);
   for (const source of [noteEditorSource, settingsSource, reminderSource]) {
@@ -152,11 +185,22 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(stylesSource, /documentInsertButton:\s*\{\s*minHeight: 44/);
   assert.match(reminderSource, /reminderAction: \{ minWidth: 62, minHeight: 48/);
   assert.match(settingsSource, /systemSettingsButton: \{ alignSelf: 'flex-start', minHeight: 48/);
-  assert.match(textDocumentSource, /imageScale >= 1\.5/);
+  assert.match(textDocumentSource, /Math\.max\(0\.2, Math\.min\(1\.5, image\.scale \?\? 1\)\)/);
+  assert.match(textDocumentSource, /resizeCorners\.map\(\(corner\) =>/);
+  assert.match(textDocumentSource, /const handleImageLongPress = \(\) => \{/);
+  assert.match(textDocumentSource, /onLongPress=\{handleImageLongPress\}/);
+  assert.match(textDocumentSource, /dragEnabledRef\.current = true/);
+  assert.match(textDocumentSource, /imageSelected \? resizeCorners\.map/);
+  assert.match(textDocumentSource, /imageSelected \? \([\s\S]*?Replace image[\s\S]*?Remove image[\s\S]*?Done editing image/);
   assert.match(textDocumentSource, /PanResponder\.create/);
   assert.match(textDocumentSource, /offsetX: next\.x, offsetY: next\.y/);
-  assert.match(textDocumentSource, /accessibilityLabel="Drag to reposition this image"/);
-  assert.match(stylesSource, /inlineImageDragHandle:/);
+  assert.match(textDocumentSource, /accessibilityLabel="Hold and drag to move image"/);
+  assert.match(textDocumentSource, /accessibilityActions=\{\[[\s\S]*?Move image left[\s\S]*?Move image down[\s\S]*?\]\}/);
+  assert.doesNotMatch(textDocumentSource, /Hold image to drag/);
+  assert.match(homeScreenSource, /backgroundColor: palette\.accentSoft, shadowColor: palette\.accent/);
+  assert.match(stylesSource, /noteRowPinned:\s*\{[\s\S]*?backgroundColor: palette\.accentSoft,[\s\S]*?borderWidth: 0,[\s\S]*?borderBottomWidth: 0,[\s\S]*?shadowColor: palette\.accent/);
+  assert.doesNotMatch(stylesSource.match(/noteRowPinned:\s*\{([^}]*)\}/)?.[1] ?? '', /borderColor:/);
+  assert.match(settingsSource, /trackColor=\{\{ false: palette\.line, true: palette\.accentSoft \}\}/);
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.android.buildType, 'apk');
   assert.match(textDocumentSource, /onError=\{\(\) => setImageUnavailable\(true\)\}/);
@@ -173,7 +217,8 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
 });
 
 test('Custom Notes keep continuous scrolling as the default while pagination is deferred', () => {
-  assert.match(textDocumentSource, /<NestableScrollContainer[\s\S]*?note\.blocks\.map\(\(block\)/);
+  assert.match(textDocumentSource, /<ScrollView[\s\S]*?note\.blocks\.map\(\(block\)/);
+  assert.match(textDocumentSource, /keyboardShouldPersistTaps="always"/);
   assert.match(textDocumentSource, /block\.type === 'checklist'[\s\S]*?<EmbeddedChecklistEditor[\s\S]*?<InlineNoteImage/);
   assert.match(stylesSource, /documentScroll:\s*\{\s*flex:\s*1,\s*minHeight:\s*0,?\s*\}/);
   assert.match(stylesSource, /documentContent:\s*\{\s*flexGrow:\s*1,[^}]*\}/);
@@ -278,4 +323,31 @@ test('screen and reminder UI depend on the typed repository boundary, not SQLite
   assert.match(repositorySource, /saveItemOrder\(noteId: string, items: ChecklistItem\[\], updatedAt: number\)/);
   assert.match(localRepositorySource, /import \* as database from '\.\/database'/);
   assert.match(localRepositorySource, /saveReminder: database\.saveReminder/);
+});
+
+
+test('editor back navigation never waits indefinitely for pending checklist writes', () => {
+  assert.doesNotMatch(noteEditorSource, /await waitForListSaves\(\)/);
+  assert.match(noteEditorSource, /Never hold Android back hostage to a checklist write/);
+  assert.match(noteEditorSource, /onBack\(\);/);
+});
+
+test('checklist database mutations use exclusive SQLite transactions and transaction handles', () => {
+  assert.equal((databaseSource.match(/withExclusiveTransactionAsync/g) ?? []).length, 6);
+  assert.match(databaseSource, /transaction\.runAsync\(\s*'INSERT INTO checklist_items/);
+  assert.match(databaseSource, /transaction\.runAsync\('DELETE FROM checklist_items/);
+});
+
+
+test('New button supports single-tap template menu and double-tap quick note', () => {
+  assert.match(homeScreenSource, /lastNewTapAt = useRef\(0\)/);
+  assert.match(homeScreenSource, /now - lastNewTapAt\.current <= 350/);
+  assert.match(homeScreenSource, /onCreate\('text'\)/);
+});
+
+test('active-note deletion snapshots checklist rows before moving to Trash', () => {
+  assert.match(repositorySource, /replaceChecklistItems\(noteId: string, items: ChecklistItem\[\], updatedAt: number\)/);
+  assert.match(localRepositorySource, /replaceChecklistItems: database\.replaceChecklistItems/);
+  assert.match(appSource, /await localNotesRepository\.replaceChecklistItems\(noteId, noteBeingDeleted\.items, noteBeingDeleted\.updatedAt\)/);
+  assert.match(databaseSource, /export async function replaceChecklistItems/);
 });

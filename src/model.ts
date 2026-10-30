@@ -22,6 +22,9 @@ const paragraphSpacings: ParagraphSpacing[] = ['compact', 'normal', 'relaxed'];
 export const defaultPreferences: AppPreferences = {
   remindersEnabled: true,
   afterWorkTime: '17:30',
+  highlightPinnedNotes: true,
+  themeMode: 'light',
+  quickNoteToolbarMode: 'simple',
 };
 
 export function createId(now = Date.now(), random = Math.random()): string {
@@ -72,6 +75,7 @@ export function createNote(
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
+    isPinned: false,
     items: [],
   };
 }
@@ -131,6 +135,12 @@ export function readNoteAppearance(serialized: string | null): NoteAppearance {
       margin: noteMargins.includes(parsed.margin as NoteMargin)
         ? parsed.margin as NoteMargin : defaultNoteAppearance.margin,
       font: parsed.font === 'serif' ? 'serif' : defaultNoteAppearance.font,
+      ...(typeof parsed.customBackgroundColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.customBackgroundColor)
+        ? { customBackgroundColor: parsed.customBackgroundColor } : {}),
+      ...(Number.isFinite(Number(parsed.quickFontSize)) && Number(parsed.quickFontSize) >= 12 && Number(parsed.quickFontSize) <= 32
+        ? { quickFontSize: Math.round(Number(parsed.quickFontSize)) } : {}),
+      ...(typeof parsed.quickTextColor === 'string' && /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(parsed.quickTextColor)
+        ? { quickTextColor: parsed.quickTextColor } : {}),
     };
   } catch {
     return { ...defaultNoteAppearance };
@@ -468,7 +478,7 @@ export function trashDaysRemaining(deletedAt: number, now = Date.now()): number 
 }
 
 export function sortNotes(notes: Note[]): Note[] {
-  return [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
+  return [...notes].sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt - a.updatedAt);
 }
 
 export function searchNotes(notes: Note[], query: string): Note[] {

@@ -15,6 +15,7 @@ interface NoteRow {
   blocks_json: string | null;
   appearance_json: string | null;
   deleted_at: number | null;
+  is_pinned: number;
   created_at: number;
   updated_at: number;
 }
@@ -57,7 +58,7 @@ function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 async function loadNotesByTrashState(trashed: boolean): Promise<Note[]> {
   const database = await getDatabase();
   const noteRows = await database.getAllAsync<NoteRow>(
-    `SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, deleted_at, created_at, updated_at
+    `SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, deleted_at, is_pinned, created_at, updated_at
      FROM notes WHERE deleted_at IS ${trashed ? 'NOT NULL' : 'NULL'} ORDER BY ${trashed ? 'deleted_at DESC' : 'updated_at DESC'}`,
   );
   const itemRows = await database.getAllAsync<ItemRow>(
@@ -89,6 +90,7 @@ async function loadNotesByTrashState(trashed: boolean): Promise<Note[]> {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       deletedAt: row.deleted_at,
+      isPinned: row.is_pinned === 1,
       items: itemsByNote.get(row.id) ?? [],
     };
   });
@@ -106,7 +108,7 @@ export async function insertNote(note: Note): Promise<void> {
   const database = await getDatabase();
   const { storedType, editorMode } = encodeNoteType(note.type);
   await database.runAsync(
-    'INSERT INTO notes (id, title, type, editor_mode, body, blocks_json, appearance_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO notes (id, title, type, editor_mode, body, blocks_json, appearance_json, is_pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     note.id,
     note.title,
     storedType,
@@ -114,6 +116,7 @@ export async function insertNote(note: Note): Promise<void> {
     isDocumentNote(note.type) ? flattenNoteBlocks(note.blocks) : note.body,
     isDocumentNote(note.type) ? JSON.stringify(note.blocks) : null,
     JSON.stringify(note.appearance),
+    note.isPinned ? 1 : 0,
     note.createdAt,
     note.updatedAt,
   );
@@ -123,13 +126,14 @@ export async function updateNote(note: Note): Promise<void> {
   const database = await getDatabase();
   const { storedType, editorMode } = encodeNoteType(note.type);
   await database.runAsync(
-    'UPDATE notes SET title = ?, type = ?, editor_mode = ?, body = ?, blocks_json = ?, appearance_json = ?, updated_at = ? WHERE id = ?',
+    'UPDATE notes SET title = ?, type = ?, editor_mode = ?, body = ?, blocks_json = ?, appearance_json = ?, is_pinned = ?, updated_at = ? WHERE id = ?',
     note.title,
     storedType,
     editorMode,
     isDocumentNote(note.type) ? flattenNoteBlocks(note.blocks) : note.body,
     isDocumentNote(note.type) ? JSON.stringify(note.blocks) : null,
     JSON.stringify(note.appearance),
+    note.isPinned ? 1 : 0,
     note.updatedAt,
     note.id,
   );
@@ -156,8 +160,8 @@ export async function permanentlyDeleteNote(noteId: string): Promise<void> {
 
 export async function addChecklistItem(item: ChecklistItem, updatedAt: number): Promise<void> {
   const database = await getDatabase();
-  await database.withTransactionAsync(async () => {
-    await database.runAsync(
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync(
       'INSERT INTO checklist_items (id, note_id, text, checked, position) VALUES (?, ?, ?, ?, ?)',
       item.id,
       item.noteId,
@@ -165,14 +169,14 @@ export async function addChecklistItem(item: ChecklistItem, updatedAt: number): 
       item.checked ? 1 : 0,
       item.position,
     );
-    await database.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, item.noteId);
+    await transaction.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, item.noteId);
   });
 }
 
 export async function saveChecklistItem(item: ChecklistItem, updatedAt: number): Promise<void> {
   const database = await getDatabase();
-  await database.withTransactionAsync(async () => {
-    await database.runAsync(
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync(
       'UPDATE checklist_items SET text = ?, checked = ?, position = ? WHERE id = ? AND note_id = ?',
       item.text,
       item.checked ? 1 : 0,
@@ -180,30 +184,52 @@ export async function saveChecklistItem(item: ChecklistItem, updatedAt: number):
       item.id,
       item.noteId,
     );
-    await database.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, item.noteId);
+    await transaction.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, item.noteId);
   });
 }
 
 export async function deleteChecklistItem(itemId: string, noteId: string, updatedAt: number): Promise<void> {
   const database = await getDatabase();
-  await database.withTransactionAsync(async () => {
-    await database.runAsync('DELETE FROM checklist_items WHERE id = ? AND note_id = ?', itemId, noteId);
-    await database.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, noteId);
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync('DELETE FROM checklist_items WHERE id = ? AND note_id = ?', itemId, noteId);
+    await transaction.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, noteId);
   });
 }
 
 export async function saveItemOrder(noteId: string, items: ChecklistItem[], updatedAt: number): Promise<void> {
   const database = await getDatabase();
-  await database.withTransactionAsync(async () => {
+  await database.withExclusiveTransactionAsync(async (transaction) => {
     for (const [position, item] of items.entries()) {
-      await database.runAsync(
+      await transaction.runAsync(
         'UPDATE checklist_items SET position = ? WHERE id = ? AND note_id = ?',
         position,
         item.id,
         noteId,
       );
     }
-    await database.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, noteId);
+    await transaction.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, noteId);
+  });
+}
+
+/** Replace a note's checklist rows from the latest editor snapshot atomically.
+ * This is used before moving an actively edited list to Trash so a pending add
+ * cannot leave the stored note snapshot out of sync with its child rows.
+ */
+export async function replaceChecklistItems(noteId: string, items: ChecklistItem[], updatedAt: number): Promise<void> {
+  const database = await getDatabase();
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync('DELETE FROM checklist_items WHERE note_id = ?', noteId);
+    for (const [position, item] of items.entries()) {
+      await transaction.runAsync(
+        'INSERT INTO checklist_items (id, note_id, text, checked, position) VALUES (?, ?, ?, ?, ?)',
+        item.id,
+        noteId,
+        item.text,
+        item.checked ? 1 : 0,
+        position,
+      );
+    }
+    await transaction.runAsync('UPDATE notes SET updated_at = ? WHERE id = ?', updatedAt, noteId);
   });
 }
 
@@ -276,9 +302,12 @@ export async function removeReminder(reminderId: string): Promise<void> {
 export async function loadPreferences(): Promise<AppPreferences> {
   const database = await getDatabase();
   const rows = await database.getAllAsync<{ key: string; value: string }>(
-    'SELECT key, value FROM app_settings WHERE key IN (?, ?)',
+    'SELECT key, value FROM app_settings WHERE key IN (?, ?, ?, ?, ?)',
     'remindersEnabled',
     'afterWorkTime',
+    'highlightPinnedNotes',
+    'themeMode',
+    'quickNoteToolbarMode',
   );
   const stored = new Map(rows.map((row) => [row.key, row.value]));
   return {
@@ -286,21 +315,41 @@ export async function loadPreferences(): Promise<AppPreferences> {
       ? defaultPreferences.remindersEnabled
       : stored.get('remindersEnabled') === 'true',
     afterWorkTime: stored.get('afterWorkTime') ?? defaultPreferences.afterWorkTime,
+    highlightPinnedNotes: stored.get('highlightPinnedNotes') === undefined
+      ? defaultPreferences.highlightPinnedNotes
+      : stored.get('highlightPinnedNotes') === 'true',
+    themeMode: stored.get('themeMode') === 'dark' ? 'dark' : 'light',
+    quickNoteToolbarMode: stored.get('quickNoteToolbarMode') === 'advanced' ? 'advanced' : 'simple',
   };
 }
 
 export async function savePreferences(preferences: AppPreferences): Promise<void> {
   const database = await getDatabase();
-  await database.withTransactionAsync(async () => {
-    await database.runAsync(
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync(
       'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
       'remindersEnabled',
       String(preferences.remindersEnabled),
     );
-    await database.runAsync(
+    await transaction.runAsync(
       'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
       'afterWorkTime',
       preferences.afterWorkTime,
+    );
+    await transaction.runAsync(
+      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      'highlightPinnedNotes',
+      String(preferences.highlightPinnedNotes),
+    );
+    await transaction.runAsync(
+      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      'themeMode',
+      preferences.themeMode,
+    );
+    await transaction.runAsync(
+      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      'quickNoteToolbarMode',
+      preferences.quickNoteToolbarMode,
     );
   });
 }

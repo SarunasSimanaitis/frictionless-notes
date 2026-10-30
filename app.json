@@ -8,10 +8,13 @@
     "userInterfaceStyle": "light",
     "plugins": [
       "expo-notifications",
-      ["expo-image-picker", {
-        "photosPermission": "Allow Frictionless Notes to add photos to your custom notes.",
-        "microphonePermission": false
-      }]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Frictionless Notes to add photos to your custom notes.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "androidStatusBar": {
       "barStyle": "dark-content",
@@ -25,15 +28,18 @@
       "package": "com.frictionlessnotes.app",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0B1B35",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d88c7cb7-35fa-4692-b7de-dbde4425f928"
+      }
     }
   }
 }

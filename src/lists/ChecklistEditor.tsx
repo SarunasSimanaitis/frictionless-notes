@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, Pressable, Text, TextInput, View, type TextInputInstance } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import type { FlatList as GestureHandlerFlatList } from 'react-native-gesture-handler';
@@ -18,6 +18,7 @@ import { cancelReminderNotifications } from '../notifications';
 import { palette } from '../theme';
 import { styles } from '../styles';
 import type { ChecklistItem, Note } from '../types';
+import { ChecklistItemLabel } from './ChecklistItemLabel';
 export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComplete, onRemindersChanged }: {
   note: Note;
   repository: NotesRepository;
@@ -29,12 +30,37 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [adding, setAdding] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef<TextInputInstance>(null);
   const listRef = useRef<GestureHandlerFlatList<ChecklistItem>>(null);
   const addingRef = useRef(false);
   const toggleLocks = useRef(new Set<string>());
   const noteRef = useRef(note);
   noteRef.current = note;
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+      const index = noteRef.current.items.findIndex((item) => item.id === editingId);
+      if (index >= 0) {
+        requestAnimationFrame(() => {
+          try { listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.28 }); }
+          catch { listRef.current?.scrollToEnd({ animated: true }); }
+        });
+      }
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, [editingId]);
+
+  const revealEditingItem = (itemId: string) => {
+    const index = noteRef.current.items.findIndex((candidate) => candidate.id === itemId);
+    if (index < 0) return;
+    requestAnimationFrame(() => {
+      try { listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.28 }); }
+      catch { listRef.current?.scrollToEnd({ animated: true }); }
+    });
+  };
 
   const readPersistedNote = async (): Promise<Note | null> => {
     try {
@@ -100,9 +126,11 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
   const beginEdit = (item: ChecklistItem) => {
     setEditingId(item.id);
     setEditingText(item.text);
+    revealEditingItem(item.id);
   };
 
   const cancelEdit = () => {
+    setKeyboardVisible(false);
     setEditingId(null);
     setEditingText('');
     Keyboard.dismiss();
@@ -118,6 +146,7 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
     };
     noteRef.current = next;
     onNoteChange(next);
+    setKeyboardVisible(false);
     setEditingId(null);
     setEditingText('');
     Keyboard.dismiss();
@@ -139,6 +168,7 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
     };
     noteRef.current = next;
     onNoteChange(next);
+    setKeyboardVisible(false);
     setEditingId(null);
     setEditingText('');
     Keyboard.dismiss();
@@ -190,6 +220,7 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
             value={editingText}
             onChangeText={setEditingText}
             autoFocus
+            onFocus={() => { setKeyboardVisible(true); revealEditingItem(item.id); }}
             multiline
             textAlignVertical="top"
             placeholder="List item"
@@ -231,9 +262,7 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
           <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
             {item.checked ? <Text style={styles.checkmark}>✓</Text> : null}
           </View>
-          <Text style={[styles.checklistText, item.checked && styles.checklistTextChecked]}>
-            {item.text || 'Empty item'}
-          </Text>
+          <ChecklistItemLabel text={item.text} checked={item.checked} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -269,7 +298,10 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
         keyboardDismissMode="on-drag"
         style={styles.itemsScroll}
         containerStyle={styles.itemsScroll}
-        contentContainerStyle={styles.itemsContent}
+        contentContainerStyle={[styles.itemsContent, keyboardVisible && styles.itemsContentKeyboard]}
+        onScrollToIndexFailed={({ averageItemLength, index }) => {
+          listRef.current?.scrollToOffset({ offset: Math.max(0, averageItemLength * index - 120), animated: true });
+        }}
         ListHeaderComponent={
           <Text style={styles.listHint}>Tap to check off. Hold an item to reorder; use Edit to change its text.</Text>
         }

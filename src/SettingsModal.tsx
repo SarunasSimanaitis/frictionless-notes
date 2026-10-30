@@ -1,15 +1,9 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackButton } from './BackButton';
 import type { AppPreferences } from './types';
+import { getThemeMode, palette, setThemeMode } from './theme';
 import type { NotificationPermission } from './notifications';
-
-const palette = {
-  background: '#F7F6F1', surface: '#FFFFFF', ink: '#242923', muted: '#74796F',
-  faint: '#9A9D95', line: '#E7E7DF', accent: '#366A52', accentSoft: '#E8F0E9',
-};
 
 interface SettingsModalProps {
   visible: boolean;
@@ -20,17 +14,6 @@ interface SettingsModalProps {
   onReminderSettingChange: (enabled: boolean) => void;
 }
 
-function timeAsDate(time: string): Date {
-  const [hours, minutes] = time.split(':').map(Number);
-  const date = new Date();
-  date.setHours(hours || 0, minutes || 0, 0, 0);
-  return date;
-}
-
-function formatTime(date: Date): string {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
 export function SettingsModal({
   visible,
   preferences,
@@ -39,12 +22,6 @@ export function SettingsModal({
   onPreferencesChange,
   onReminderSettingChange,
 }: SettingsModalProps) {
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [pickerDate, setPickerDate] = useState(() => timeAsDate(preferences.afterWorkTime));
-
-  useEffect(() => {
-    setPickerDate(timeAsDate(preferences.afterWorkTime));
-  }, [preferences.afterWorkTime]);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -59,7 +36,26 @@ export function SettingsModal({
           <Text style={styles.headerTitle}>Settings</Text>
           <View style={styles.headerAction} />
         </View>
-        <View style={styles.content}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+          <Text style={styles.eyebrow}>APPEARANCE</Text>
+          <Text style={styles.preferenceTitle}>App theme</Text>
+          <Text style={styles.preferenceDescription}>Choose a consistent light or dark look across the app.</Text>
+          <View style={styles.themeChoices}>
+            {(['light', 'dark'] as const).map((mode) => (
+              <Pressable
+                key={mode}
+                accessibilityRole="button"
+                accessibilityState={{ selected: preferences.themeMode === mode }}
+                onPress={() => onPreferencesChange({ ...preferences, themeMode: mode })}
+                style={[styles.themeChoice, preferences.themeMode === mode && styles.themeChoiceSelected]}
+              >
+                <Text style={[styles.themeChoiceText, preferences.themeMode === mode && styles.themeChoiceTextSelected]}>
+                  {mode === 'light' ? '☀  Light' : '☾  Dark'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.sectionRule} />
           <Text style={styles.eyebrow}>REMINDERS</Text>
           <View style={styles.preferenceRow}>
             <View style={styles.preferenceCopy}>
@@ -76,7 +72,7 @@ export function SettingsModal({
               accessibilityLabel="Enable reminder notifications"
               value={preferences.remindersEnabled}
               onValueChange={onReminderSettingChange}
-              trackColor={{ false: '#D7D9D2', true: '#AFC8B7' }}
+              trackColor={{ false: palette.line, true: palette.accentSoft }}
               thumbColor={preferences.remindersEnabled ? palette.accent : '#FFFFFF'}
             />
           </View>
@@ -99,48 +95,60 @@ export function SettingsModal({
           </View>
 
           <View style={styles.sectionRule} />
-          <Text style={styles.eyebrow}>QUICK TIME</Text>
-          <Text style={styles.preferenceTitle}>After work</Text>
-          <Text style={styles.preferenceDescription}>New “After work” reminders use this time.</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`After work time ${preferences.afterWorkTime}`}
-            onPress={() => setShowTimePicker(true)}
-            style={({ pressed }) => [styles.timeButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.timeButtonText}>{preferences.afterWorkTime}</Text>
-            <Text style={styles.timeButtonHint}>Change time</Text>
-          </Pressable>
-          {showTimePicker ? (
-            <DateTimePicker
-              value={pickerDate}
-              mode="time"
-              display="default"
-              onChange={(_, selectedDate) => {
-                setShowTimePicker(false);
-                if (selectedDate) {
-                  setPickerDate(selectedDate);
-                  onPreferencesChange({ ...preferences, afterWorkTime: formatTime(selectedDate) });
-                }
-              }}
+          <Text style={styles.eyebrow}>NOTES</Text>
+          <View style={styles.preferenceRow}>
+            <View style={styles.preferenceCopy}>
+              <Text style={styles.preferenceTitle}>Highlight pinned notes</Text>
+              <Text style={styles.preferenceDescription}>Give pinned notes a subtle accent on the home screen.</Text>
+            </View>
+            <Switch
+              accessibilityLabel="Highlight pinned notes"
+              value={preferences.highlightPinnedNotes}
+              onValueChange={(highlightPinnedNotes) => onPreferencesChange({ ...preferences, highlightPinnedNotes })}
+              trackColor={{ false: palette.line, true: palette.accentSoft }}
+              thumbColor={preferences.highlightPinnedNotes ? palette.accent : '#FFFFFF'}
             />
-          ) : null}
-          <Text style={styles.smallNote}>Times follow this device’s local time zone.</Text>
-        </View>
+          </View>
+
+          <View style={styles.sectionRule} />
+          <Text style={styles.eyebrow}>EDITOR</Text>
+          <View style={styles.preferenceRow}>
+            <View style={styles.preferenceCopy}>
+              <Text style={styles.preferenceTitle}>Show formatting toolbar</Text>
+              <Text style={styles.preferenceDescription}>Show font, size, text style, colour, checklist and image controls in Quick and Custom Notes.</Text>
+            </View>
+            <Switch
+              accessibilityLabel="Show formatting toolbar in notes"
+              value={preferences.quickNoteToolbarMode === 'advanced'}
+              onValueChange={(enabled) => onPreferencesChange({
+                ...preferences,
+                quickNoteToolbarMode: enabled ? 'advanced' : 'simple',
+              })}
+              trackColor={{ false: palette.line, true: palette.accentSoft }}
+              thumbColor={preferences.quickNoteToolbarMode === 'advanced' ? palette.accent : palette.surface}
+            />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { minHeight: 58, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerAction: { minWidth: 88, minHeight: 48, flexDirection: 'row', alignItems: 'center' },
   headerTitle: { color: palette.ink, fontSize: 19, fontWeight: '700' },
-  content: { paddingHorizontal: 22, paddingTop: 18 },
+  content: { flex: 1 },
+  contentContainer: { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 36, gap: 0 },
   eyebrow: { color: palette.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.1, marginBottom: 13 },
   preferenceRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 14 },
   preferenceCopy: { flex: 1 },
+  themeChoices: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  themeChoice: { flex: 1, minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, alignItems: 'center', justifyContent: 'center' },
+  themeChoiceSelected: { backgroundColor: palette.accentSoft, borderColor: palette.accent },
+  themeChoiceText: { color: palette.muted, fontSize: 14, fontWeight: '600' },
+  themeChoiceTextSelected: { color: palette.accent, fontWeight: '700' },
   preferenceTitle: { color: palette.ink, fontSize: 16, fontWeight: '600' },
   preferenceDescription: { color: palette.muted, fontSize: 13, lineHeight: 19, marginTop: 4 },
   permissionCard: { padding: 15, marginTop: 12, borderRadius: 15, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
@@ -155,3 +163,15 @@ const styles = StyleSheet.create({
   smallNote: { color: palette.faint, fontSize: 12, marginTop: 10 },
   pressed: { opacity: 0.72 },
 });
+
+const originalThemeMode = getThemeMode();
+setThemeMode('light');
+const lightStyles = createStyles();
+setThemeMode('dark');
+const darkStyles = createStyles();
+setThemeMode(originalThemeMode);
+const styles = new Proxy(lightStyles, {
+  get(_target, property) {
+    return Reflect.get(getThemeMode() === 'dark' ? darkStyles : lightStyles, property);
+  },
+}) as typeof lightStyles;

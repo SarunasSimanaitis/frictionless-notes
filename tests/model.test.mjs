@@ -48,6 +48,17 @@ import {
   toFontSizeCss,
 } from '../src/editor/formatting.ts';
 
+
+test('custom page colors and quick-note formatting preferences survive appearance parsing', () => {
+  const appearance = readNoteAppearance(JSON.stringify({
+    background: 'warmWhite', paper: 'plain', margin: 'comfortable', font: 'serif',
+    customBackgroundColor: '#243B53', quickFontSize: 22, quickTextColor: '#2F6D9E',
+  }));
+  assert.equal(appearance.customBackgroundColor, '#243B53');
+  assert.equal(appearance.quickFontSize, 22);
+  assert.equal(appearance.quickTextColor, '#2F6D9E');
+});
+
 test('new notes have stable IDs and begin with genuinely empty content', () => {
   const note = createNote('text', 10, 'note-1');
   assert.equal(note.id, 'note-1');
@@ -356,6 +367,13 @@ test('notes sort newest first and search matches titles, body, and item text', (
   assert.deepEqual(sortNotes([older, newer]).map((note) => note.id), ['newer', 'older']);
   assert.deepEqual(searchNotes([older, newer], 'oat').map((note) => note.id), ['newer']);
   assert.deepEqual(searchNotes([older, newer], 'READ').map((note) => note.id), ['older']);
+});
+
+test('pinned notes sort ahead of recent notes and the setting defaults to highlighting them', () => {
+  const olderPinned = { ...createNote('text', 5, 'pinned'), isPinned: true };
+  const recent = createNote('text', 50, 'recent');
+  const newerPinned = { ...createNote('text', 10, 'pinned-newer'), isPinned: true };
+  assert.deepEqual(sortNotes([recent, olderPinned, newerPinned]).map((note) => note.id), ['pinned-newer', 'pinned', 'recent']);
 });
 
 test('trash notes expire at 30 days and show an accurate remaining lifetime', () => {

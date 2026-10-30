@@ -13,6 +13,7 @@ export const localNotesRepository: NotesRepository = {
   saveChecklistItem: database.saveChecklistItem,
   deleteChecklistItem: database.deleteChecklistItem,
   saveItemOrder: database.saveItemOrder,
+  replaceChecklistItems: database.replaceChecklistItems,
   loadReminders: database.loadReminders,
   saveReminder: database.saveReminder,
   setReminderNotificationId: database.setReminderNotificationId,
