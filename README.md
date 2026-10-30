@@ -70,27 +70,59 @@ It's not about reinventing note-taking. It's about paying attention to the detai
 
 ## Screenshots
 
-The interface is available in both light and dark themes.
+The interface is available in both light and dark themes. Screenshots are intentionally displayed at a smaller, consistent width so the gallery stays easy to scan.
 
 ### Light theme
 
-| Home | Shopping list |
-| --- | --- |
-| ![Home screen — light theme](./screenshots/01-home-light.png) | ![Shopping list — light theme](./screenshots/02-shopping-list-light.png) |
-
-| Rich-text editor | Reminders |
-| --- | --- |
-| ![Rich-text editor — light theme](./screenshots/03-rich-text-editor-light.png) | ![Reminders — light theme](./screenshots/04-reminders-light.png) |
-
-![Settings — light theme](./screenshots/05-settings-light.png)
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Home</strong><br>
+      <img src="./screenshots/01-home-light.png" width="220" alt="Home screen — light theme">
+    </td>
+    <td align="center" width="50%">
+      <strong>Shopping list</strong><br>
+      <img src="./screenshots/02-shopping-list-light.png" width="220" alt="Shopping list — light theme">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Rich-text editor</strong><br>
+      <img src="./screenshots/03-rich-text-editor-light.png" width="220" alt="Rich-text editor — light theme">
+    </td>
+    <td align="center" width="50%">
+      <strong>Reminders</strong><br>
+      <img src="./screenshots/04-reminders-light.png" width="220" alt="Reminders — light theme">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <strong>Settings</strong><br>
+      <img src="./screenshots/05-settings-light.png" width="220" alt="Settings — light theme">
+    </td>
+  </tr>
+</table>
 
 ### Dark theme
 
-| Home | Shopping list |
-| --- | --- |
-| ![Home screen — dark theme](./screenshots/06-home-dark.png) | ![Shopping list — dark theme](./screenshots/07-shopping-list-dark.png) |
-
-![Settings — dark theme](./screenshots/08-settings-dark.png)
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Home</strong><br>
+      <img src="./screenshots/06-home-dark.png" width="220" alt="Home screen — dark theme">
+    </td>
+    <td align="center" width="50%">
+      <strong>Shopping list</strong><br>
+      <img src="./screenshots/07-shopping-list-dark.png" width="220" alt="Shopping list — dark theme">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <strong>Settings</strong><br>
+      <img src="./screenshots/08-settings-dark.png" width="220" alt="Settings — dark theme">
+    </td>
+  </tr>
+</table>
 
 ---
 
