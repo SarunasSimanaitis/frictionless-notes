@@ -1,6 +1,6 @@
 {
   "name": "frictionless-notes",
-  "description": "A calm, offline-first notes and checklist app.",
+  "description": "A personal productivity app for notes, checklists and everyday tasks.",
   "license": "0BSD",
   "version": "1.0.0",
   "type": "module",
