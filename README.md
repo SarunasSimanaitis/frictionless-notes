@@ -1,8 +1,8 @@
 # Frictionless Notes
 
-**A calmer, offline-first notes app for the little things you need to remember.**
+**A personal productivity app for capturing notes, organising checklists and managing everyday tasks.**
 
-Frictionless Notes is a mobile notes and checklist app built with React Native, Expo and TypeScript. It is designed around a simple idea: everyday note-taking should feel effortless. Create a note, add a shopping list, check something off, and get on with your day.
+Frictionless Notes is a mobile productivity app built with React Native, Expo and TypeScript. It is designed around a simple idea: everyday note-taking and task management should feel effortless. Create a note, organise a shopping list, check something off, and get on with your day.
 
 ---
 
@@ -66,7 +66,7 @@ It's not about reinventing note-taking. It's about paying attention to the detai
 - **Inline images** — add local photos to Custom Notes, then move, resize, replace or remove them.
 - **Local reminders** — schedule reminders using the device's time zone.
 - **Trash and recovery** — restore deleted notes during the 30-day retention period or permanently delete them.
-- **Offline-first storage** — notes are stored locally with SQLite; note images are kept in the app's documents directory.
+- **On-device storage** — notes are stored with SQLite; note images are kept in the app's documents directory.
 
 ## Screenshots
 
