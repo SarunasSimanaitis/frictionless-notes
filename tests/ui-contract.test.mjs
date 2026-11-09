@@ -72,7 +72,16 @@ test('the checklist input stays in a keyboard-aware flex layout below its indepe
   assert.doesNotMatch(stylesSource, /addItemBar:\s*\{[^}]*position:\s*'absolute'/s);
   assert.match(checklistEditorSource, /Keyboard\.addListener\('keyboardDidShow'/);
   assert.match(checklistEditorSource, /scrollToIndex\(\{ index, animated: true, viewPosition: 0\.28 \}\)/);
-  assert.match(stylesSource, /itemsContentKeyboard:\s*\{\s*paddingBottom:\s*280/);
+  assert.match(stylesSource, /itemsContentEditing:\s*\{[\s\S]*?paddingBottom:\s*160/);
+  assert.doesNotMatch(checklistEditorSource, /setKeyboardVisible/);
+});
+
+test('editing a list item keeps focus and keyboard while the list scrolls', () => {
+  assert.match(checklistEditorSource, /keyboardDismissMode=\{editingId \? 'none' : 'on-drag'\}/);
+  assert.match(checklistEditorSource, /removeClippedSubviews=\{false\}/);
+  assert.match(checklistEditorSource, /pendingRevealId\.current = null;\s*scrollToItem\(itemId\)/);
+  assert.doesNotMatch(checklistEditorSource, /onFocus=\{/);
+  assert.match(checklistEditorSource, /const EditingChecklistRow = memo\(/);
 });
 
 test('item submission keeps the input focused and accepts taps while the keyboard is open', () => {

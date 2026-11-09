@@ -66,4 +66,7 @@ export async function runDatabaseMigrations(database: SchemaDatabase): Promise<v
     await database.execAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0');
   }
   await database.execAsync('CREATE INDEX IF NOT EXISTS notes_deleted_at_idx ON notes(deleted_at)');
+  // Without this, deleting a checklist item makes SQLite scan every reminder to
+  // enforce ON DELETE CASCADE.
+  await database.execAsync('CREATE INDEX IF NOT EXISTS reminders_checklist_item_idx ON reminders(checklist_item_id)');
 }

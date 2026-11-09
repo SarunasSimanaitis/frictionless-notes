@@ -50,6 +50,9 @@ function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       await runDatabaseMigrations(database);
       return database;
     })();
+    // A failed open (e.g. disk full, interrupted migration) must not poison the
+    // cached promise for the rest of the session; the next call retries.
+    databasePromise.catch(() => { databasePromise = null; });
   }
 
   return databasePromise;
@@ -61,8 +64,11 @@ async function loadNotesByTrashState(trashed: boolean): Promise<Note[]> {
     `SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, deleted_at, is_pinned, created_at, updated_at
      FROM notes WHERE deleted_at IS ${trashed ? 'NOT NULL' : 'NULL'} ORDER BY ${trashed ? 'deleted_at DESC' : 'updated_at DESC'}`,
   );
+  // Only load items for the notes being shown, not for every note in Trash too.
   const itemRows = await database.getAllAsync<ItemRow>(
-    'SELECT id, note_id, text, checked, position FROM checklist_items ORDER BY position ASC',
+    `SELECT id, note_id, text, checked, position FROM checklist_items
+     WHERE note_id IN (SELECT id FROM notes WHERE deleted_at IS ${trashed ? 'NOT NULL' : 'NULL'})
+     ORDER BY note_id, position ASC`,
   );
   const itemsByNote = new Map<string, ChecklistItem[]>();
 

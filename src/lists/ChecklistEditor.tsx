@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, Pressable, Text, TextInput, View, type TextInputInstance } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import type { FlatList as GestureHandlerFlatList } from 'react-native-gesture-handler';
@@ -28,38 +28,50 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
 }) {
   const [newItemText, setNewItemText] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState('');
   const [adding, setAdding] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef<TextInputInstance>(null);
   const listRef = useRef<GestureHandlerFlatList<ChecklistItem>>(null);
   const addingRef = useRef(false);
   const toggleLocks = useRef(new Set<string>());
   const noteRef = useRef(note);
   noteRef.current = note;
+  // Keyboard visibility is tracked in a ref, not state: toggling list padding on
+  // every keyboard show/hide resized the content mid-scroll and made it jump.
+  const keyboardVisibleRef = useRef(false);
+  // Scroll to the item being edited exactly once per edit, never on later focus
+  // or keyboard-height changes, so manual scrolling while editing is respected.
+  const pendingRevealId = useRef<string | null>(null);
 
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => {
-      setKeyboardVisible(true);
-      const index = noteRef.current.items.findIndex((item) => item.id === editingId);
-      if (index >= 0) {
-        requestAnimationFrame(() => {
-          try { listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.28 }); }
-          catch { listRef.current?.scrollToEnd({ animated: true }); }
-        });
-      }
-    });
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
-    return () => { show.remove(); hide.remove(); };
-  }, [editingId]);
-
-  const revealEditingItem = (itemId: string) => {
+  const scrollToItem = useCallback((itemId: string) => {
     const index = noteRef.current.items.findIndex((candidate) => candidate.id === itemId);
     if (index < 0) return;
     requestAnimationFrame(() => {
       try { listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.28 }); }
       catch { listRef.current?.scrollToEnd({ animated: true }); }
     });
+  }, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardVisibleRef.current = true;
+      const itemId = pendingRevealId.current;
+      if (!itemId) return;
+      pendingRevealId.current = null;
+      scrollToItem(itemId);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => { keyboardVisibleRef.current = false; });
+    return () => { show.remove(); hide.remove(); };
+  }, [scrollToItem]);
+
+  const revealEditingItem = (itemId: string) => {
+    if (keyboardVisibleRef.current) {
+      // Keyboard already open (e.g. coming from the add bar): no keyboardDidShow
+      // will fire, so scroll once the edit row has laid out.
+      pendingRevealId.current = null;
+      setTimeout(() => scrollToItem(itemId), 60);
+    } else {
+      pendingRevealId.current = itemId;
+    }
   };
 
   const readPersistedNote = async (): Promise<Note | null> => {
@@ -125,20 +137,18 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
 
   const beginEdit = (item: ChecklistItem) => {
     setEditingId(item.id);
-    setEditingText(item.text);
     revealEditingItem(item.id);
   };
 
   const cancelEdit = () => {
-    setKeyboardVisible(false);
+    pendingRevealId.current = null;
     setEditingId(null);
-    setEditingText('');
     Keyboard.dismiss();
   };
 
-  const saveItemEdit = async (item: ChecklistItem) => {
+  const saveItemEdit = async (item: ChecklistItem, editedText: string) => {
     const current = noteRef.current;
-    const updatedItem = { ...item, text: editingText.trim() };
+    const updatedItem = { ...item, text: editedText.trim() };
     const next: Note = {
       ...current,
       items: editChecklistItemText(current.items, item.id, updatedItem.text),
@@ -146,9 +156,8 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
     };
     noteRef.current = next;
     onNoteChange(next);
-    setKeyboardVisible(false);
+    pendingRevealId.current = null;
     setEditingId(null);
-    setEditingText('');
     Keyboard.dismiss();
     try {
       await repository.saveChecklistItem(updatedItem, next.updatedAt);
@@ -168,9 +177,8 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
     };
     noteRef.current = next;
     onNoteChange(next);
-    setKeyboardVisible(false);
+    pendingRevealId.current = null;
     setEditingId(null);
-    setEditingText('');
     Keyboard.dismiss();
     try {
       const remindersForItem = (await repository.loadReminders(note.id)).filter((reminder) => reminder.checklistItemId === item.id);
@@ -211,71 +219,16 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
     void persistOrder(reorderItem(currentItems, itemId, currentIndex + delta));
   };
 
-  const renderItem = ({ item, drag, isActive }: RenderItemParams<ChecklistItem>) => {
-    if (editingId === item.id) {
-      return (
-        <View style={styles.editingItem}>
-          <TextInput
-            accessibilityLabel={`Edit ${item.text || 'list item'}`}
-            value={editingText}
-            onChangeText={setEditingText}
-            autoFocus
-            onFocus={() => { setKeyboardVisible(true); revealEditingItem(item.id); }}
-            multiline
-            textAlignVertical="top"
-            placeholder="List item"
-            placeholderTextColor={palette.faint}
-            style={styles.itemEditInput}
-            selectionColor={palette.accent}
-          />
-          <View style={styles.itemEditActions}>
-            <Pressable accessibilityRole="button" onPress={() => void remove(item)} style={styles.itemActionButton}>
-              <Text style={styles.deleteText}>Delete</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={cancelEdit} style={styles.itemActionButton}>
-              <Text style={styles.mutedActionText}>Cancel</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => void saveItemEdit(item)} style={[styles.itemActionButton, styles.itemSaveButton]}>
-              <Text style={styles.itemSaveText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      );
-    }
+  // Handlers live in a ref so memoized rows always call the latest version
+  // without every keystroke or save re-rendering the whole list.
+  const actions = useRef<RowActions>(null as unknown as RowActions);
+  actions.current = { toggle, beginEdit, cancelEdit, saveItemEdit, remove, moveByAccessibilityAction };
 
-    return (
-      <View style={[styles.checklistRow, isActive && styles.checklistRowActive]}>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: item.checked }}
-          accessibilityLabel={`${item.text || 'Empty item'}, ${item.checked ? 'completed' : 'not completed'}`}
-          accessibilityActions={[
-            { name: 'moveUp', label: 'Move item up' },
-            { name: 'moveDown', label: 'Move item down' },
-          ]}
-          onAccessibilityAction={(event) => moveByAccessibilityAction(item.id, event.nativeEvent.actionName)}
-          onLongPress={drag}
-          delayLongPress={700}
-          onPress={() => void toggle(item.id)}
-          style={({ pressed }) => [styles.checklistToggleArea, pressed && styles.rowPressed]}
-        >
-          <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
-            {item.checked ? <Text style={styles.checkmark}>✓</Text> : null}
-          </View>
-          <ChecklistItemLabel text={item.text} checked={item.checked} />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${item.text || 'list item'}`}
-          onPress={() => beginEdit(item)}
-          style={({ pressed }) => [styles.editItemButton, pressed && styles.pressed]}
-        >
-
-          <Text style={styles.editItemGlyph}>✎</Text>
-        </Pressable>
-      </View>
-    );
-  };
+  const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<ChecklistItem>) => (
+    editingId === item.id
+      ? <EditingChecklistRow item={item} actions={actions} />
+      : <ChecklistRow item={item} drag={drag} isActive={isActive} actions={actions} />
+  ), [editingId]);
 
   return (
     <View style={styles.listEditor}>
@@ -294,11 +247,16 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
             <View style={styles.editItemButton} />
           </View>
         )}
+        extraData={editingId}
         keyboardShouldPersistTaps="always"
-        keyboardDismissMode="on-drag"
+        // Scrolling while an item is being edited must not close the keyboard.
+        keyboardDismissMode={editingId ? 'none' : 'on-drag'}
+        // Android detaches off-screen rows by default, which blurs a focused
+        // input that scrolls out of view and drops the keyboard.
+        removeClippedSubviews={false}
         style={styles.itemsScroll}
         containerStyle={styles.itemsScroll}
-        contentContainerStyle={[styles.itemsContent, keyboardVisible && styles.itemsContentKeyboard]}
+        contentContainerStyle={[styles.itemsContent, editingId !== null && styles.itemsContentEditing]}
         onScrollToIndexFailed={({ averageItemLength, index }) => {
           listRef.current?.scrollToOffset({ offset: Math.max(0, averageItemLength * index - 120), animated: true });
         }}
@@ -338,3 +296,89 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
     </View>
   );
 }
+
+type RowActions = {
+  toggle: (itemId: string) => Promise<void>;
+  beginEdit: (item: ChecklistItem) => void;
+  cancelEdit: () => void;
+  saveItemEdit: (item: ChecklistItem, editedText: string) => Promise<void>;
+  remove: (item: ChecklistItem) => Promise<void>;
+  moveByAccessibilityAction: (itemId: string, actionName: string) => void;
+};
+
+/** Holds its own draft text so typing re-renders only this row, not the list. */
+const EditingChecklistRow = memo(function EditingChecklistRow({ item, actions }: {
+  item: ChecklistItem;
+  actions: { current: RowActions };
+}) {
+  const [editingText, setEditingText] = useState(item.text);
+  return (
+    <View style={styles.editingItem}>
+      <TextInput
+        accessibilityLabel={`Edit ${item.text || 'list item'}`}
+        value={editingText}
+        onChangeText={setEditingText}
+        autoFocus
+        multiline
+        textAlignVertical="top"
+        placeholder="List item"
+        placeholderTextColor={palette.faint}
+        style={styles.itemEditInput}
+        selectionColor={palette.accent}
+      />
+      <View style={styles.itemEditActions}>
+        <Pressable accessibilityRole="button" onPress={() => void actions.current.remove(item)} style={styles.itemActionButton}>
+          <Text style={styles.deleteText}>Delete</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => actions.current.cancelEdit()} style={styles.itemActionButton}>
+          <Text style={styles.mutedActionText}>Cancel</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => void actions.current.saveItemEdit(item, editingText)} style={[styles.itemActionButton, styles.itemSaveButton]}>
+          <Text style={styles.itemSaveText}>Done</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+});
+
+const ChecklistRow = memo(function ChecklistRow({ item, drag, isActive, actions }: {
+  item: ChecklistItem;
+  drag: () => void;
+  isActive: boolean;
+  actions: { current: RowActions };
+}) {
+  const toggle = (itemId: string) => actions.current.toggle(itemId);
+  const beginEdit = (target: ChecklistItem) => actions.current.beginEdit(target);
+  const moveByAccessibilityAction = (itemId: string, actionName: string) => actions.current.moveByAccessibilityAction(itemId, actionName);
+  return (
+    <View style={[styles.checklistRow, isActive && styles.checklistRowActive]}>
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: item.checked }}
+        accessibilityLabel={`${item.text || 'Empty item'}, ${item.checked ? 'completed' : 'not completed'}`}
+        accessibilityActions={[
+          { name: 'moveUp', label: 'Move item up' },
+          { name: 'moveDown', label: 'Move item down' },
+        ]}
+        onAccessibilityAction={(event) => moveByAccessibilityAction(item.id, event.nativeEvent.actionName)}
+        onLongPress={drag}
+        delayLongPress={700}
+        onPress={() => void toggle(item.id)}
+        style={({ pressed }) => [styles.checklistToggleArea, pressed && styles.rowPressed]}
+      >
+        <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
+          {item.checked ? <Text style={styles.checkmark}>✓</Text> : null}
+        </View>
+        <ChecklistItemLabel text={item.text} checked={item.checked} />
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${item.text || 'list item'}`}
+        onPress={() => beginEdit(item)}
+        style={({ pressed }) => [styles.editItemButton, pressed && styles.pressed]}
+      >
+        <Text style={styles.editItemGlyph}>✎</Text>
+      </Pressable>
+    </View>
+  );
+});

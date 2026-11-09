@@ -786,8 +786,10 @@ const createStyles = () => StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 12,
   },
-  itemsContentKeyboard: {
-    paddingBottom: 280,
+  itemsContentEditing: {
+    // Constant while an item is being edited (not toggled by keyboard events),
+    // so the last items can still scroll above the keyboard without jumps.
+    paddingBottom: 160,
   },
   checklistRow: {
     minHeight: 60,

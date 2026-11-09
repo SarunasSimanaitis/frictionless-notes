@@ -44,7 +44,8 @@ export async function pickNoteImage(noteId: string): Promise<InlineImageBlock | 
 
 export async function removeNoteImage(uri: string): Promise<void> {
   const documentDirectory = FileSystem.documentDirectory;
-  if (!documentDirectory || !uri.startsWith(`${documentDirectory}${imageDirectoryName}`)) return;
+  // Only ever delete files inside the app's own image folder.
+  if (!documentDirectory || !uri.startsWith(`${documentDirectory}${imageDirectoryName}`) || uri.includes('..')) return;
   if ((await FileSystem.getInfoAsync(uri)).exists) await FileSystem.deleteAsync(uri);
 }
 
