@@ -21,7 +21,7 @@ import {
 } from './formatting';
 import type { ParagraphSpacing } from '../types';
 import { getThemeMode, palette, setThemeMode } from '../theme';
-import { FileImageIcon } from './FileImageIcon';
+import { ChecklistIcon, ImageIcon, UndoIcon } from './ToolbarIcons';
 
 type MenuName = 'font' | 'size' | 'color' | 'overflow' | 'alignment' | 'spacing' | null;
 type ColorKind = 'text' | 'highlight';
@@ -160,42 +160,6 @@ export function FormattingToolbar({
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        horizontal
-        keyboardShouldPersistTaps="always"
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}
-      >
-        <ToolbarButton label="Font family and style" selected={menu === 'font'} disabled={disabled} onPress={() => showMenu('font')}>
-          <Text style={[styles.familyGlyph, menu === 'font' && styles.buttonGlyphSelected]}>A</Text>
-        </ToolbarButton>
-        <ToolbarButton label={`Font size, ${currentFontSize} pixels`} selected={menu === 'size'} disabled={disabled} onPress={() => showMenu('size')}>
-          <Text style={styles.sizeGlyph}>{currentFontSize}<Text style={styles.downArrow}>⌄</Text></Text>
-        </ToolbarButton>
-        <View style={styles.separator} />
-        <ToolbarButton label="Bold" selected={Boolean(active?.state.isBoldActive)} disabled={disabled} onPress={() => runEditorCommand((editor) => editor.toggleBold())}>
-          <Text style={[styles.buttonGlyph, styles.boldGlyph]}>B</Text>
-        </ToolbarButton>
-        <ToolbarButton label="Italic" selected={Boolean(active?.state.isItalicActive)} disabled={disabled} onPress={() => runEditorCommand((editor) => editor.toggleItalic())}>
-          <Text style={[styles.buttonGlyph, styles.italicGlyph]}>I</Text>
-        </ToolbarButton>
-        <ToolbarButton label="Underline" selected={Boolean(active?.state.isUnderlineActive)} disabled={disabled} onPress={() => runEditorCommand((editor) => editor.toggleUnderline())}>
-          <Text style={[styles.buttonGlyph, styles.underlineGlyph]}>U</Text>
-        </ToolbarButton>
-        <ToolbarButton label="Text color and highlight" selected={menu === 'color'} disabled={disabled} onPress={() => showMenu('color')}>
-          <View style={styles.colorGlyphWrap}>
-            <Text style={[styles.buttonGlyph, styles.boldGlyph]}>A</Text>
-            <View style={[styles.colorGlyphLine, { backgroundColor: active?.state.activeColor ?? palette.accent }]} />
-          </View>
-        </ToolbarButton>
-        <View style={styles.separator} />
-        <ToolbarButton label="Choose image from gallery" disabled={false} onPress={onInsertImage}>
-          <FileImageIcon color={palette.ink} />
-        </ToolbarButton>
-        <ToolbarButton label="More formatting" selected={menu === 'overflow'} disabled={disabled} onPress={() => showMenu('overflow')}>
-          <Text style={styles.moreGlyph}>•••</Text>
-        </ToolbarButton>
-      </ScrollView>
 
       {menu === 'font' ? (
         <View style={styles.menuPanel} accessibilityLabel="Font family options">
@@ -333,8 +297,6 @@ export function FormattingToolbar({
             <View style={styles.actionsRow}>
               <ActionOption label="Checklist" accessibilityLabel="Insert checklist at the cursor" onPress={() => { onInsertChecklist(); setMenu(null); }} />
               <ActionOption label="Page style" onPress={() => { onOpenPageStyle(); setMenu(null); }} />
-              <ActionOption label="Undo" onPress={() => runEditorCommand((editor) => editor.undo())} />
-              <ActionOption label="Redo" onPress={() => runEditorCommand((editor) => editor.redo())} />
             </View>
           </View>
         </View>
@@ -383,6 +345,52 @@ export function FormattingToolbar({
           </View>
         </View>
       ) : null}
+      <ScrollView
+        horizontal
+        keyboardShouldPersistTaps="always"
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.row}
+      >
+        <ToolbarButton label="Font family and style" selected={menu === 'font'} disabled={disabled} onPress={() => showMenu('font')}>
+          <Text style={[styles.familyGlyph, menu === 'font' && styles.buttonGlyphSelected]}>A</Text>
+        </ToolbarButton>
+        <ToolbarButton label={`Font size, ${currentFontSize} pixels`} selected={menu === 'size'} disabled={disabled} onPress={() => showMenu('size')}>
+          <Text style={styles.sizeGlyph}>{currentFontSize}<Text style={styles.downArrow}>⌄</Text></Text>
+        </ToolbarButton>
+        <View style={styles.separator} />
+        <ToolbarButton label="Bold" selected={Boolean(active?.state.isBoldActive)} disabled={disabled} onPress={() => runEditorCommand((editor) => editor.toggleBold())}>
+          <Text style={[styles.buttonGlyph, styles.boldGlyph]}>B</Text>
+        </ToolbarButton>
+        <ToolbarButton label="Italic" selected={Boolean(active?.state.isItalicActive)} disabled={disabled} onPress={() => runEditorCommand((editor) => editor.toggleItalic())}>
+          <Text style={[styles.buttonGlyph, styles.italicGlyph]}>I</Text>
+        </ToolbarButton>
+        <ToolbarButton label="Underline" selected={Boolean(active?.state.isUnderlineActive)} disabled={disabled} onPress={() => runEditorCommand((editor) => editor.toggleUnderline())}>
+          <Text style={[styles.buttonGlyph, styles.underlineGlyph]}>U</Text>
+        </ToolbarButton>
+        <ToolbarButton label="Text color and highlight" selected={menu === 'color'} disabled={disabled} onPress={() => showMenu('color')}>
+          <View style={styles.colorGlyphWrap}>
+            <Text style={[styles.buttonGlyph, styles.boldGlyph]}>A</Text>
+            <View style={[styles.colorGlyphLine, { backgroundColor: active?.state.activeColor ?? palette.accent }]} />
+          </View>
+        </ToolbarButton>
+        <View style={styles.separator} />
+        <ToolbarButton label="Insert checklist" onPress={() => { setMenu(null); onInsertChecklist(); }}>
+          <ChecklistIcon color={palette.ink} />
+        </ToolbarButton>
+        <ToolbarButton label="Choose image from gallery" disabled={false} onPress={() => { setMenu(null); onInsertImage(); }}>
+          <ImageIcon color={palette.ink} />
+        </ToolbarButton>
+        <View style={styles.separator} />
+        <ToolbarButton label="Undo" disabled={disabled} onPress={() => runEditorCommand((editor) => editor.undo())}>
+          <UndoIcon color={palette.ink} />
+        </ToolbarButton>
+        <ToolbarButton label="Redo" disabled={disabled} onPress={() => runEditorCommand((editor) => editor.redo())}>
+          <UndoIcon color={palette.ink} flip />
+        </ToolbarButton>
+        <ToolbarButton label="More formatting" selected={menu === 'overflow'} disabled={disabled} onPress={() => showMenu('overflow')}>
+          <Text style={styles.moreGlyph}>•••</Text>
+        </ToolbarButton>
+      </ScrollView>
     </View>
   );
 }
@@ -402,17 +410,29 @@ function ActionOption({ label, accessibilityLabel, selected = false, onPress }: 
 }
 
 const createStyles = () => StyleSheet.create({
+  // Docked at the bottom like Samsung Notes, so it sits right above the
+  // keyboard, in thumb reach, instead of covering the top of the note.
   container: {
     flexShrink: 0,
+    marginHorizontal: 8,
+    marginTop: 4,
+    marginBottom: 6,
+    borderRadius: 18,
+    overflow: 'hidden',
     backgroundColor: palette.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: palette.line,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.line,
+    elevation: 4,
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   row: {
     minHeight: 48,
     alignItems: 'center',
-    paddingHorizontal: 8,
-    gap: 4,
+    paddingHorizontal: 4,
+    gap: 0,
   },
   button: {
     minWidth: 48,
@@ -474,12 +494,6 @@ const createStyles = () => StyleSheet.create({
     fontSize: 20,
     letterSpacing: 1,
   },
-  galleryGlyph: {
-    color: palette.ink,
-    fontSize: 25,
-    lineHeight: 30,
-    fontWeight: '500',
-  },
   separator: {
     width: StyleSheet.hairlineWidth,
     height: 26,
@@ -488,8 +502,10 @@ const createStyles = () => StyleSheet.create({
   },
   menuPanel: {
     paddingHorizontal: 12,
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.line,
     gap: 7,
     backgroundColor: palette.surface,
   },

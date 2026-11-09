@@ -1,25 +1,33 @@
 import { ChecklistItemLabel } from '../lists/ChecklistItemLabel';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import {
-  Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputInstance, type ViewStyle,
+  Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ScrollViewInstance, type StyleProp, type TextInputInstance, type ViewInstance, type ViewStyle,
 } from 'react-native';
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { RichText, TenTapStartKit, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
 import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
 import { NoteFontFormattingBridge } from './fontFormattingBridge';
 import { editorHtml } from '../../editor-web/build/editorHtml';
 import {
   canAddChecklistItem, createEmbeddedChecklistBlock, createEmbeddedChecklistItem, createId, editChecklistItemText,
-  insertChecklistBlockAtSelection, normalizeItemPositions, removeChecklistItem, reorderItem, richHtmlToPlainText, toggleItem,
+  insertChecklistBlockAtSelection, placeImageBlock, normalizeItemPositions, removeChecklistItem, reorderItem, richHtmlToPlainText, toggleItem,
 } from '../model';
 import { pickNoteImage, removeNoteImage } from '../noteImages';
 import { noteBackgroundColors, noteBackgroundLabels, noteMarginValues, palette } from '../theme';
 import { styles } from '../styles';
 import type {
-  EmbeddedChecklistBlock, EmbeddedChecklistItem, InlineImageBlock, Note, NoteAppearance, NoteBackground, NoteBlock,
+  EmbeddedChecklistBlock, EmbeddedChecklistItem, ImageWrap, InlineImageBlock, Note, NoteAppearance, NoteBackground, NoteBlock,
   NoteMargin, ParagraphBlock, ParagraphSpacing, PaperStyle,
 } from '../types';
 import { customNoteCss } from './customNoteCss';
+import { ImageActionsBar, InlineNoteImage, imageBoxSize, maxScaleFor, type ImageDragCallbacks } from './InlineNoteImage';
+
+/** Top of a wrapped image inside its paragraph; matches the editor body's top padding. */
+const WRAP_TOP = 12;
+/** Top of an inline image inside its container (margin + padding in inlineImageContainer). */
+const INLINE_IMAGE_TOP = 14;
+
+type FloatSpace = { side: 'left' | 'right'; width: number; height: number };
 
 type ShallowEditorThemeOptions = Omit<EditorBridgeOptions, 'theme'> & {
   theme?: { webview?: StyleProp<ViewStyle>; webviewContainer?: StyleProp<ViewStyle> };
@@ -167,8 +175,352 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
       : block));
   };
 
+  // ---- Images: selection, resizing, wrapping and drag-to-place ----
+  const contentWidth = Math.max(1, viewportWidth - 16 - pageMargin * 2);
+  const blocksRef = useRef(note.blocks);
+  blocksRef.current = note.blocks;
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollFrameRef = useRef<ViewInstance>(null);
+  const scrollY = useRef(0);
+  const scrollFrame = useRef({ y: 0, height: 0 });
+  const unitLayouts = useRef(new Map<string, { y: number; height: number }>());
+  const dragging = useRef<{ imageId: string; startContentY: number; startScrollY: number } | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<{ id: string; scale: number } | null>(null);
+  const [unavailableImages, setUnavailableImages] = useState<ReadonlySet<string>>(() => new Set());
+  const [imageBusy, setImageBusy] = useState(false);
+  const [drop, setDrop] = useState<{ imageId: string; beforeBlockId: string | null; wrap: ImageWrap; y: number } | null>(null);
+
+  // Render units: a wrapped image is drawn together with the paragraph after it.
+  const units: { key: string; blocks: NoteBlock[] }[] = [];
+  for (let index = 0; index < note.blocks.length; index += 1) {
+    const block = note.blocks[index];
+    const next = note.blocks[index + 1];
+    if (usesRichText && block.type === 'image' && (block.wrap === 'left' || block.wrap === 'right') && next?.type === 'paragraph') {
+      units.push({ key: next.id, blocks: [block, next] });
+      index += 1;
+    } else {
+      units.push({ key: block.id, blocks: [block] });
+    }
+  }
+  const unitsRef = useRef(units);
+  unitsRef.current = units;
+
+  const commitImageBlocks = async (blocks: NoteBlock[], obsoleteImageUris?: string[]) => {
+    setImageBusy(true);
+    try {
+      return await onBlocksCommit(blocks, obsoleteImageUris);
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  /** Place an image and shrink it if it becomes wrapped while wider than a wrapped image may be. */
+  const placeImage = (imageId: string, beforeBlockId: string | null, wrap: ImageWrap) => {
+    const placed = placeImageBlock(blocksRef.current, imageId, beforeBlockId, wrap, createId());
+    return placed.map((block) => block.id === imageId && block.type === 'image' && (block.scale ?? 1) > maxScaleFor(wrap)
+      ? { ...block, scale: 0.5 }
+      : block);
+  };
+
+  const sameLayout = (a: NoteBlock[], b: NoteBlock[]) => a.length === b.length && a.every((block, index) => {
+    const other = b[index];
+    return block.id === other.id && (block.type !== 'image' || (other.type === 'image' && (block.wrap ?? 'none') === (other.wrap ?? 'none') && block.scale === other.scale));
+  });
+
+  const changeImageWrap = async (imageId: string, wrap: ImageWrap) => {
+    const blocks = blocksRef.current;
+    const index = blocks.findIndex((block) => block.id === imageId);
+    if (index < 0) return;
+    const next = placeImage(imageId, blocks[index + 1]?.id ?? null, wrap);
+    if (!sameLayout(blocks, next)) await commitImageBlocks(next);
+  };
+
+  const resizeImage = async (imageId: string, scale: number) => {
+    const blocks = blocksRef.current;
+    const next = blocks.map((block) => block.id === imageId && block.type === 'image' ? { ...block, scale } : block);
+    if (!sameLayout(blocks, next)) await commitImageBlocks(next);
+  };
+
+  const moveImageByAction = (imageId: string, action: string) => {
+    const blocks = blocksRef.current;
+    const index = blocks.findIndex((block) => block.id === imageId);
+    const image = blocks[index];
+    if (index < 0 || image.type !== 'image') return;
+    const wrap = image.wrap ?? 'none';
+    if (action === 'moveUp' && index > 0) void commitImageBlocks(placeImage(imageId, blocks[index - 1].id, wrap));
+    if (action === 'moveDown' && index < blocks.length - 1) void commitImageBlocks(placeImage(imageId, blocks[index + 2]?.id ?? null, wrap));
+    if (action === 'moveLeft' && wrap !== 'left') void changeImageWrap(imageId, wrap === 'right' ? 'none' : 'left');
+    if (action === 'moveRight' && wrap !== 'right') void changeImageWrap(imageId, wrap === 'left' ? 'none' : 'right');
+  };
+
+  const replaceImage = async (image: InlineImageBlock) => {
+    setImageBusy(true);
+    try {
+      const nextImage = await pickNoteImage(note.id);
+      if (!nextImage) return;
+      const replacement: InlineImageBlock = { ...nextImage, id: image.id, ...(image.wrap ? { wrap: image.wrap } : {}), ...(image.scale ? { scale: image.scale } : {}) };
+      const nextBlocks = blocksRef.current.map((block) => block.id === image.id ? replacement : block);
+      if (!(await onBlocksCommit(nextBlocks, [image.uri]))) await removeNoteImage(nextImage.uri);
+      setUnavailableImages((current) => {
+        const next = new Set(current);
+        next.delete(image.id);
+        return next;
+      });
+    } catch {
+      Alert.alert('Could not replace image', 'Please choose another image.');
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  const removeImage = (image: InlineImageBlock) => {
+    Alert.alert('Remove this image?', 'The image will be removed from this note.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => {
+        setSelectedImageId(null);
+        void commitImageBlocks(blocksRef.current.filter((block) => block.id !== image.id), [image.uri]);
+      } },
+    ]);
+  };
+
+  const computeDrop = (imageId: string, absoluteX: number, contentY: number) => {
+    const relativeX = absoluteX / Math.max(viewportWidth, 1);
+    const wrap: ImageWrap = relativeX < 0.33 ? 'left' : relativeX > 0.67 ? 'right' : 'none';
+    let beforeBlockId: string | null = null;
+    let y = 0;
+    for (const unit of unitsRef.current) {
+      const target = unit.blocks.find((block) => block.id !== imageId);
+      const layout = unitLayouts.current.get(unit.key);
+      if (!target || !layout) continue;
+      if (layout.y + layout.height / 2 > contentY) {
+        beforeBlockId = target.id;
+        y = layout.y;
+        break;
+      }
+      y = layout.y + layout.height;
+    }
+    return { imageId, beforeBlockId, wrap, y };
+  };
+
+  const fingerContentY = (translationY: number) => {
+    const current = dragging.current;
+    if (!current) return 0;
+    return current.startContentY + translationY + (scrollY.current - current.startScrollY);
+  };
+
+  const dragCallbacks: ImageDragCallbacks = {
+    onDragStart: (imageId, fingerOffsetY) => {
+      const unit = unitsRef.current.find((candidate) => candidate.blocks.some((block) => block.id === imageId));
+      const layout = unit ? unitLayouts.current.get(unit.key) : undefined;
+      const imageTop = (layout?.y ?? 0) + (unit && unit.blocks.length > 1 ? WRAP_TOP : INLINE_IMAGE_TOP);
+      dragging.current = { imageId, startContentY: imageTop + fingerOffsetY, startScrollY: scrollY.current };
+      setSelectedImageId(null);
+      Keyboard.dismiss();
+    },
+    onDragMove: (absoluteX, absoluteY, translationY) => {
+      const current = dragging.current;
+      if (!current) return;
+      // Auto-scroll when the finger nears the top or bottom of the note.
+      const frame = scrollFrame.current;
+      if (frame.height > 0 && absoluteY < frame.y + 72) scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current - 18), animated: false });
+      else if (frame.height > 0 && absoluteY > frame.y + frame.height - 72) scrollRef.current?.scrollTo({ y: scrollY.current + 18, animated: false });
+      const next = computeDrop(current.imageId, absoluteX, fingerContentY(translationY));
+      setDrop((previous) => previous && previous.beforeBlockId === next.beforeBlockId && previous.wrap === next.wrap && previous.y === next.y ? previous : next);
+    },
+    onDragEnd: (absoluteX, _absoluteY, translationY) => {
+      const current = dragging.current;
+      dragging.current = null;
+      setDrop(null);
+      if (!current) return;
+      const target = computeDrop(current.imageId, absoluteX, fingerContentY(translationY));
+      const next = placeImage(current.imageId, target.beforeBlockId, target.wrap);
+      if (!sameLayout(blocksRef.current, next)) void commitImageBlocks(next);
+    },
+    onDragCancel: () => {
+      dragging.current = null;
+      setDrop(null);
+    },
+    scrollDeltaSinceDragStart: () => dragging.current ? scrollY.current - dragging.current.startScrollY : 0,
+  };
+
+  // Starting to type elsewhere deselects the image, like tapping outside it.
+  const textFocused = Boolean(activeRichEditor?.state.isFocused);
+  useEffect(() => {
+    if (textFocused) setSelectedImageId(null);
+  }, [textFocused]);
+
+  const renderImage = (image: InlineImageBlock) => (
+    <InlineNoteImage
+      image={image}
+      availableWidth={contentWidth}
+      selected={selectedImageId === image.id}
+      previewScale={imagePreview?.id === image.id ? imagePreview.scale : null}
+      unavailable={unavailableImages.has(image.id)}
+      onUnavailable={() => setUnavailableImages((current) => new Set(current).add(image.id))}
+      onSelect={(selected) => {
+        if (selected) Keyboard.dismiss();
+        setSelectedImageId(selected ? image.id : null);
+      }}
+      onPreviewScale={(scale) => setImagePreview(scale === null ? null : { id: image.id, scale })}
+      onCommitScale={(scale) => void resizeImage(image.id, scale)}
+      onAccessibilityMove={(action) => moveImageByAction(image.id, action)}
+      drag={dragCallbacks}
+    />
+  );
+
+  const renderImageActions = (image: InlineImageBlock) => selectedImageId === image.id ? (
+    <ImageActionsBar
+      wrap={image.wrap ?? 'none'}
+      busy={imageBusy}
+      onWrapChange={(wrap) => void changeImageWrap(image.id, wrap)}
+      onReplace={() => void replaceImage(image)}
+      onRemove={() => removeImage(image)}
+      onDone={() => setSelectedImageId(null)}
+    />
+  ) : null;
+
+  const renderParagraph = (block: ParagraphBlock, floatSpace?: FloatSpace) => usesRichText ? (
+    <RichParagraphEditor
+      key="text"
+      block={block}
+      appearance={note.appearance}
+      themeMode={themeMode}
+      alignment={block.alignment ?? 'left'}
+      spacing={block.spacing ?? 'normal'}
+      placeholder={note.blocks.length === 1 ? 'Start writing…' : 'Continue writing…'}
+      focusedBlockId={focusedBlockId}
+      firstEditorRef={firstRichEditorRef}
+      isFirst={block.id === firstParagraphId}
+      floatSpace={floatSpace}
+      onEditorStateChange={updateActiveRichEditor}
+      onChange={(html, text) => updateRichParagraph(block.id, html, text)}
+    />
+  ) : (
+    <TextInput
+      key="text"
+      ref={(input) => {
+        if (input) {
+          paragraphRefs.current.set(block.id, input);
+          if (block.id === firstParagraphId) firstParagraphInputRef.current = input;
+        } else {
+          paragraphRefs.current.delete(block.id);
+          if (block.id === firstParagraphId) firstParagraphInputRef.current = null;
+        }
+      }}
+      accessibilityLabel="Note text paragraph"
+      value={block.text}
+      onChangeText={(text) => updateParagraph(block.id, text)}
+      onFocus={() => {
+        focusedBlockId.current = block.id;
+        if (!selections.current.has(block.id)) {
+          selections.current.set(block.id, { start: block.text.length, end: block.text.length });
+        }
+      }}
+      onSelectionChange={({ nativeEvent }) => {
+        focusedBlockId.current = block.id;
+        selections.current.set(block.id, nativeEvent.selection);
+      }}
+      onContentSizeChange={({ nativeEvent }) => {
+        const height = Math.max(44, Math.ceil(nativeEvent.contentSize.height) + 12);
+        setParagraphHeights((current) => current[block.id] === height
+          ? current
+          : { ...current, [block.id]: height });
+      }}
+      multiline
+      scrollEnabled={false}
+      textAlignVertical="top"
+      placeholder={note.blocks.length === 1 ? 'Start writing…' : 'Continue writing…'}
+      placeholderTextColor={palette.faint}
+      style={[styles.documentParagraphInput, { height: paragraphHeights[block.id] ?? 44, fontSize: note.appearance.quickFontSize ?? 16, color: note.appearance.quickTextColor ?? palette.ink, fontFamily: note.appearance.font === 'serif' ? 'serif' : undefined }]}
+      selectionColor={palette.accent}
+    />
+  );
+
   return (
     <View style={[styles.documentEditor, isCustom && styles.customDocumentEditor]}>
+      <View
+        ref={scrollFrameRef}
+        collapsable={false}
+        style={styles.documentScrollFrame}
+        onLayout={() => scrollFrameRef.current?.measureInWindow((_x: number, y: number, _width: number, height: number) => { scrollFrame.current = { y, height }; })}
+      >
+      <ScrollView
+        ref={scrollRef}
+        style={[styles.documentScroll, usesRichText && { backgroundColor: pageColor }]}
+        contentContainerStyle={[styles.documentContent, isCustom && { paddingHorizontal: pageMargin }]}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
+        scrollEnabled={drop === null && imagePreview === null}
+        scrollEventThrottle={16}
+        onScroll={({ nativeEvent }) => { scrollY.current = nativeEvent.contentOffset.y; }}
+      >
+        {units.map((unit) => {
+          const [first, second] = unit.blocks;
+          let content: ReactNode;
+          if (first.type === 'image' && second?.type === 'paragraph') {
+            const size = imageBoxSize(first, contentWidth, imagePreview?.id === first.id ? imagePreview.scale : null);
+            const side = first.wrap === 'right' ? 'right' : 'left';
+            content = (
+              <>
+                <View style={[styles.paragraphFrame, { minHeight: size.height + WRAP_TOP + 8 }]}>
+                  {renderParagraph(second, { side, width: size.width, height: size.height })}
+                  <View style={[styles.wrappedImage, { top: WRAP_TOP }, side === 'left' ? { left: 0 } : { right: 0 }]}>
+                    {renderImage(first)}
+                  </View>
+                </View>
+                {renderImageActions(first)}
+              </>
+            );
+          } else if (first.type === 'paragraph') {
+            content = <><View style={styles.paragraphFrame}>{renderParagraph(first)}</View></>;
+          } else if (first.type === 'checklist') {
+            const block = first;
+            content = (
+                <EmbeddedChecklistEditor
+                  noteId={note.id}
+                  block={block}
+                  onItemsChange={(items) => onBlocksChange(note.blocks.map((candidate) =>
+                    candidate.id === block.id && candidate.type === 'checklist'
+                      ? { ...candidate, items }
+                      : candidate,
+                  ))}
+                  onRemove={() => Alert.alert('Remove checklist?', 'This removes the checklist and its items from this note.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Remove checklist', style: 'destructive', onPress: () => {
+                      const nextBlocks = note.blocks.filter((candidate) => candidate.id !== block.id);
+                      onBlocksChange(nextBlocks.length ? nextBlocks : [{ id: createId(), type: 'paragraph', text: '' }]);
+                    } },
+                  ])}
+                />
+            );
+          } else {
+            content = (
+              <View style={[styles.inlineImageContainer, { alignItems: first.wrap === 'left' ? 'flex-start' : first.wrap === 'right' ? 'flex-end' : 'center' }]}>
+                {renderImage(first)}
+                {renderImageActions(first)}
+              </View>
+            );
+          }
+          const isDragged = drop !== null && unit.blocks.some((block) => block.id === drop.imageId);
+          return (
+            <View
+              key={unit.key}
+              onLayout={({ nativeEvent }) => unitLayouts.current.set(unit.key, { y: nativeEvent.layout.y, height: nativeEvent.layout.height })}
+              style={isDragged ? styles.draggingUnit : undefined}
+            >
+              {content}
+            </View>
+          );
+        })}
+        {drop && drop.y >= 0 ? (
+          <View pointerEvents="none" style={[styles.imageDropIndicator, { top: drop.y - 2 }]}>
+            <View style={styles.imageDropLine} />
+            <Text style={styles.imageDropLabel}>{drop.wrap === 'left' ? 'Image left · text wraps' : drop.wrap === 'right' ? 'Image right · text wraps' : 'Image on its own line'}</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+      </View>
       {quickNoteToolbarMode === 'advanced' ? (
         <FormattingToolbar
           active={activeRichEditor}
@@ -181,97 +533,6 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
         />
       ) : null}
 
-      <ScrollView
-        style={[styles.documentScroll, usesRichText && { backgroundColor: pageColor }]}
-        contentContainerStyle={[styles.documentContent, isCustom && { paddingHorizontal: pageMargin }]}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="none"
-      >
-        {note.blocks.map((block) => block.type === 'paragraph' ? (
-          usesRichText ? (
-            <RichParagraphEditor
-              key={block.id}
-              block={block}
-              appearance={note.appearance}
-              themeMode={themeMode}
-              alignment={block.alignment ?? 'left'}
-              spacing={block.spacing ?? 'normal'}
-              placeholder={note.blocks.length === 1 ? 'Start writing…' : 'Continue writing…'}
-              focusedBlockId={focusedBlockId}
-              firstEditorRef={firstRichEditorRef}
-              isFirst={block.id === firstParagraphId}
-              onEditorStateChange={updateActiveRichEditor}
-              onChange={(html, text) => updateRichParagraph(block.id, html, text)}
-            />
-          ) : (
-            <TextInput
-              key={block.id}
-              ref={(input) => {
-                if (input) {
-                  paragraphRefs.current.set(block.id, input);
-                  if (block.id === firstParagraphId) firstParagraphInputRef.current = input;
-                } else {
-                  paragraphRefs.current.delete(block.id);
-                  if (block.id === firstParagraphId) firstParagraphInputRef.current = null;
-                }
-              }}
-              accessibilityLabel="Note text paragraph"
-              value={block.text}
-              onChangeText={(text) => updateParagraph(block.id, text)}
-              onFocus={() => {
-                focusedBlockId.current = block.id;
-                if (!selections.current.has(block.id)) {
-                  selections.current.set(block.id, { start: block.text.length, end: block.text.length });
-                }
-              }}
-              onSelectionChange={({ nativeEvent }) => {
-                focusedBlockId.current = block.id;
-                selections.current.set(block.id, nativeEvent.selection);
-              }}
-              onContentSizeChange={({ nativeEvent }) => {
-                const height = Math.max(44, Math.ceil(nativeEvent.contentSize.height) + 12);
-                setParagraphHeights((current) => current[block.id] === height
-                  ? current
-                  : { ...current, [block.id]: height });
-              }}
-              multiline
-              scrollEnabled={false}
-              textAlignVertical="top"
-              placeholder={note.blocks.length === 1 ? 'Start writing…' : 'Continue writing…'}
-              placeholderTextColor={palette.faint}
-              style={[styles.documentParagraphInput, { height: paragraphHeights[block.id] ?? 44, fontSize: note.appearance.quickFontSize ?? 16, color: note.appearance.quickTextColor ?? palette.ink, fontFamily: note.appearance.font === 'serif' ? 'serif' : undefined }]}
-              selectionColor={palette.accent}
-            />
-          )
-        ) : block.type === 'checklist' ? (
-          <EmbeddedChecklistEditor
-            key={block.id}
-            noteId={note.id}
-            block={block}
-            onItemsChange={(items) => onBlocksChange(note.blocks.map((candidate) =>
-              candidate.id === block.id && candidate.type === 'checklist'
-                ? { ...candidate, items }
-                : candidate,
-            ))}
-            onRemove={() => Alert.alert('Remove checklist?', 'This removes the checklist and its items from this note.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Remove checklist', style: 'destructive', onPress: () => {
-                const nextBlocks = note.blocks.filter((candidate) => candidate.id !== block.id);
-                onBlocksChange(nextBlocks.length ? nextBlocks : [{ id: createId(), type: 'paragraph', text: '' }]);
-              } },
-            ])}
-          />
-        ) : (
-          <InlineNoteImage
-            key={block.id}
-            noteId={note.id}
-            image={block}
-            blocks={note.blocks}
-            availableWidth={Math.max(1, viewportWidth - 16 - pageMargin * 2)}
-            onBlocksCommit={onBlocksCommit}
-          />
-        ))}
-      </ScrollView>
       {isCustom ? (
         <PageStyleModal
           visible={pageStyleOpen}
@@ -318,7 +579,7 @@ function textAsHtml(text: string): string {
   return `<p>${escaped.replace(/\n/g, '<br>') || '<br>'}</p>`;
 }
 
-function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing, placeholder, focusedBlockId, firstEditorRef, isFirst, onEditorStateChange, onChange }: {
+function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing, placeholder, focusedBlockId, firstEditorRef, isFirst, floatSpace, onEditorStateChange, onChange }: {
   block: ParagraphBlock;
   appearance: NoteAppearance;
   themeMode: 'light' | 'dark';
@@ -328,6 +589,8 @@ function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing,
   focusedBlockId: MutableRefObject<string | null>;
   firstEditorRef: MutableRefObject<EditorBridge | null>;
   isFirst: boolean;
+  /** Space reserved for a wrapped image so text flows beside and then below it. */
+  floatSpace?: FloatSpace;
   onEditorStateChange: (
     editor: EditorBridge,
     state: ReturnType<EditorBridge['getEditorState']>,
@@ -380,6 +643,19 @@ function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing,
     editor.injectCSS(customNoteCss(appearance, alignment, spacing, themeMode), 'page-style');
     editor.setPlaceholder(placeholder);
   }, [alignment, appearance, editor, editorState.isReady, placeholder, spacing, themeMode]);
+
+  const floatSide = floatSpace?.side;
+  const floatWidth = floatSpace?.width;
+  const floatHeight = floatSpace?.height;
+  useEffect(() => {
+    if (!editorState.isReady) return;
+    // A transparent float at the top of the text reserves room for the native
+    // image drawn over it, so lines wrap beside the image and continue full
+    // width below it, like Samsung Notes' "wrap text" option.
+    editor.injectCSS(floatSide && floatWidth && floatHeight
+      ? `.ProseMirror::before{content:"";float:${floatSide};width:${floatWidth + 12}px;height:${floatHeight + 6}px;}.ProseMirror::after{content:"";display:block;clear:both;}`
+      : '', 'image-wrap');
+  }, [editor, editorState.isReady, floatHeight, floatSide, floatWidth]);
 
   useEffect(() => {
     if (typeof html !== 'string') return;
@@ -514,259 +790,6 @@ function PageStyleChoice({ selected, label, onPress }: { selected: boolean; labe
     >
       <Text style={[styles.pageStyleOptionText, selected && styles.pageStyleOptionTextSelected]}>{label}</Text>
     </Pressable>
-  );
-}
-
-function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit }: {
-  noteId: string;
-  image: InlineImageBlock;
-  blocks: NoteBlock[];
-  availableWidth: number;
-  onBlocksCommit: (blocks: NoteBlock[], obsoleteImageUris?: string[]) => Promise<boolean>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [imageUnavailable, setImageUnavailable] = useState(false);
-  const [imageSelected, setImageSelected] = useState(false);
-  const dragEnabledRef = useRef(false);
-  const [scalePreview, setScalePreview] = useState<number | null>(null);
-  const imageAspect = image.width / image.height;
-  const imageScale = Math.max(0.2, Math.min(1.5, image.scale ?? 1));
-  const displayedScale = scalePreview ?? imageScale;
-  const requestedWidth = availableWidth * displayedScale;
-  const imageHeight = Math.min(requestedWidth / imageAspect, 480);
-  const imageWidth = imageHeight * imageAspect;
-  const [offset, setOffset] = useState({ x: image.offsetX ?? 0, y: image.offsetY ?? 0 });
-  const offsetRef = useRef(offset);
-  const dragOrigin = useRef(offset);
-  const scaleOrigin = useRef(imageScale);
-  const resizeCorners = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] as const;
-  const clampOffset = (x: number, y: number) => ({
-    x: Math.max(-0.5, Math.min(0.5, x)),
-    y: Math.max(-1, Math.min(1, y)),
-  });
-  useEffect(() => {
-    const savedOffset = clampOffset(image.offsetX ?? 0, image.offsetY ?? 0);
-    offsetRef.current = savedOffset;
-    setOffset(savedOffset);
-  }, [image.offsetX, image.offsetY]);
-
-  const commitOffset = useCallback(async (x: number, y: number) => {
-    const previous = dragOrigin.current;
-    const next = clampOffset(x, y);
-    offsetRef.current = next;
-    setOffset(next);
-    setBusy(true);
-    try {
-      const saved = await onBlocksCommit(blocks.map((block) => block.id === image.id && block.type === 'image'
-        ? { ...block, offsetX: next.x, offsetY: next.y }
-        : block));
-      if (!saved) throw new Error('Image position was not saved.');
-    } catch {
-      offsetRef.current = previous;
-      setOffset(previous);
-      Alert.alert('Could not move image', 'Please try again.');
-    } finally {
-      setBusy(false);
-    }
-  }, [blocks, image.id, onBlocksCommit]);
-  const persistScale = useCallback(async (nextScale: number) => {
-    const clamped = Math.round(Math.max(0.2, Math.min(1.5, nextScale)) * 100) / 100;
-    if (clamped === imageScale || busy) return;
-    setBusy(true);
-    try {
-      const saved = await onBlocksCommit(blocks.map((block) => block.id === image.id && block.type === 'image'
-        ? { ...block, scale: clamped }
-        : block));
-      if (!saved) throw new Error('Image size was not saved.');
-    } catch {
-      Alert.alert('Could not resize image', 'Please try again.');
-    } finally {
-      setBusy(false);
-    }
-  }, [blocks, busy, image.id, imageScale, onBlocksCommit]);
-
-  const resizeResponders = useMemo(() => {
-    const createResizeResponder = (corner: typeof resizeCorners[number]) => PanResponder.create({
-      onStartShouldSetPanResponder: () => !busy,
-      onMoveShouldSetPanResponder: (_event, gesture) => !busy && Math.hypot(gesture.dx, gesture.dy) > 2,
-      onPanResponderGrant: () => { scaleOrigin.current = imageScale; },
-      onPanResponderMove: (_event, gesture) => {
-        const horizontal = corner.endsWith('Right') ? gesture.dx : -gesture.dx;
-        const vertical = corner.startsWith('bottom') ? gesture.dy : -gesture.dy;
-        const delta = (horizontal + vertical) / Math.max(availableWidth * 1.7, 1);
-        setScalePreview(Math.max(0.2, Math.min(1.5, scaleOrigin.current + delta)));
-      },
-      onPanResponderRelease: (_event, gesture) => {
-        const horizontal = corner.endsWith('Right') ? gesture.dx : -gesture.dx;
-        const vertical = corner.startsWith('bottom') ? gesture.dy : -gesture.dy;
-        const delta = (horizontal + vertical) / Math.max(availableWidth * 1.7, 1);
-        const next = Math.max(0.2, Math.min(1.5, scaleOrigin.current + delta));
-        setScalePreview(null);
-        void persistScale(next);
-      },
-      onPanResponderTerminate: () => setScalePreview(null),
-    });
-    return {
-      topLeft: createResizeResponder('topLeft'),
-      topRight: createResizeResponder('topRight'),
-      bottomLeft: createResizeResponder('bottomLeft'),
-      bottomRight: createResizeResponder('bottomRight'),
-    };
-  }, [availableWidth, busy, imageScale, persistScale]);
-
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_event, gesture) => dragEnabledRef.current && !busy && Math.hypot(gesture.dx, gesture.dy) > 3,
-    onPanResponderGrant: () => { dragOrigin.current = offsetRef.current; },
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_event, gesture) => {
-      const next = clampOffset(
-        dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
-        dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
-      );
-      offsetRef.current = next;
-      setOffset(next);
-    },
-    onPanResponderRelease: (_event, gesture) => {
-      dragEnabledRef.current = false;
-        void commitOffset(
-        dragOrigin.current.x + gesture.dx / Math.max(availableWidth, 1),
-        dragOrigin.current.y + gesture.dy / Math.max(availableWidth, 1),
-      );
-    },
-    onPanResponderTerminate: () => {
-      dragEnabledRef.current = false;
-        offsetRef.current = dragOrigin.current;
-      setOffset(dragOrigin.current);
-    },
-  }), [availableWidth, busy, commitOffset]);
-
-  const handleImageLongPress = () => {
-    dragEnabledRef.current = true;
-    setImageSelected(true);
-  };
-
-  const closeImageSelection = () => {
-    dragEnabledRef.current = false;
-    setImageSelected(false);
-  };
-
-  const replaceImage = async () => {
-    setBusy(true);
-    try {
-      const nextImage = await pickNoteImage(noteId);
-      if (!nextImage) return;
-      const nextBlocks = blocks.map((block) => block.id === image.id ? nextImage : block);
-      if (!(await onBlocksCommit(nextBlocks, [image.uri]))) await removeNoteImage(nextImage.uri);
-    } catch {
-      Alert.alert('Could not replace image', 'Please choose another image.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeImage = () => {
-    Alert.alert('Remove this image?', 'The image will be removed from this note.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          setBusy(true);
-          void onBlocksCommit(blocks.filter((block) => block.id !== image.id), [image.uri])
-            .finally(() => setBusy(false));
-        },
-      },
-    ]);
-  };
-
-  return (
-    <View style={styles.inlineImageContainer}>
-      {imageUnavailable ? (
-        <View
-          accessible
-          accessibilityRole="text"
-          accessibilityLabel="Image unavailable on this device. Replace or remove it."
-          style={[styles.inlineImageUnavailable, { width: imageWidth, height: imageHeight, transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }]}
-        >
-          <Text style={styles.inlineImageUnavailableText}>Image unavailable on this device</Text>
-        </View>
-      ) : (
-        <View style={{ alignSelf: 'center', position: 'relative', width: imageWidth, height: imageHeight, transform: [{ translateX: offset.x * availableWidth }, { translateY: offset.y * availableWidth }] }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Hold and drag to move image"
-            accessibilityActions={[
-              { name: 'moveLeft', label: 'Move image left' },
-              { name: 'moveRight', label: 'Move image right' },
-              { name: 'moveUp', label: 'Move image up' },
-              { name: 'moveDown', label: 'Move image down' },
-            ]}
-            onAccessibilityAction={({ nativeEvent }) => {
-              const current = offsetRef.current;
-              dragOrigin.current = current;
-              const step = 0.08;
-              void commitOffset(
-                current.x + (nativeEvent.actionName === 'moveRight' ? step : nativeEvent.actionName === 'moveLeft' ? -step : 0),
-                current.y + (nativeEvent.actionName === 'moveDown' ? step : nativeEvent.actionName === 'moveUp' ? -step : 0),
-              );
-            }}
-            onLongPress={handleImageLongPress}
-            delayLongPress={350}
-            disabled={busy}
-            {...panResponder.panHandlers}
-          >
-            <Image
-              accessibilityLabel="Image in custom note"
-              source={{ uri: image.uri }}
-              resizeMode="contain"
-              onError={() => setImageUnavailable(true)}
-              style={{ width: imageWidth, height: imageHeight, borderRadius: 8 }}
-            />
-          </Pressable>
-          {imageSelected ? resizeCorners.map((corner) => (
-            <View
-              key={corner}
-              accessible
-              accessibilityRole="adjustable"
-              accessibilityLabel={`Resize image from ${corner.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}`}
-              {...resizeResponders[corner].panHandlers}
-              style={[styles.inlineImageResizeHandle, corner === 'topLeft' ? styles.inlineImageResizeTopLeft : corner === 'topRight' ? styles.inlineImageResizeTopRight : corner === 'bottomLeft' ? styles.inlineImageResizeBottomLeft : styles.inlineImageResizeBottomRight]}
-            />
-          )) : null}
-        </View>
-      )}
-      {imageSelected ? (
-        <View style={styles.inlineImageActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Replace image"
-            disabled={busy}
-            onPress={() => void replaceImage()}
-            style={styles.inlineImageAction}
-          >
-            <Text style={styles.inlineImageActionText}>{busy ? 'Saving…' : 'Replace'}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Remove image"
-            disabled={busy}
-            onPress={removeImage}
-            style={styles.inlineImageAction}
-          >
-            <Text style={styles.inlineImageRemoveText}>Remove</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Done editing image"
-            onPress={closeImageSelection}
-            style={styles.inlineImageAction}
-          >
-            <Text style={styles.inlineImageActionText}>Done</Text>
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
   );
 }
 

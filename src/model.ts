@@ -1,6 +1,6 @@
 import type {
   AppPreferences, ChecklistItem, CustomNoteTemplateId, EmbeddedChecklistBlock,
-  EmbeddedChecklistItem, Note, NoteBlock, NoteEditorMode, NoteType, ParagraphBlock,
+  EmbeddedChecklistItem, ImageWrap, InlineImageBlock, Note, NoteBlock, NoteEditorMode, NoteType, ParagraphBlock,
   Reminder, StoredNoteType, NoteAppearance, NoteBackground, PaperStyle, NoteMargin, ParagraphSpacing,
 } from './types';
 
@@ -209,6 +209,7 @@ export function readNoteBlocks(serialized: string | null, legacyBody: string, no
               ...(Number.isFinite(Number(value.offsetY))
                 ? { offsetY: Math.max(-1, Math.min(1, Number(value.offsetY))) }
                 : {}),
+              ...(value.wrap === 'left' || value.wrap === 'right' ? { wrap: value.wrap } : {}),
             });
           }
         }
@@ -501,4 +502,33 @@ export function searchNotes(notes: Note[], query: string): Note[] {
 export function selectionForDocument(text: string, requestedOffset: number): number {
   if (text.length === 0) return 0;
   return Math.max(0, Math.min(requestedOffset, text.length));
+}
+
+/**
+ * Move an image to sit before `beforeBlockId` (or at the end when null) with the
+ * given text wrapping. A wrapped image always gets a paragraph right after it
+ * so there is text to flow around it.
+ */
+export function placeImageBlock(
+  blocks: NoteBlock[],
+  imageId: string,
+  beforeBlockId: string | null,
+  wrap: ImageWrap,
+  newParagraphId: string,
+): NoteBlock[] {
+  const image = blocks.find((block) => block.id === imageId);
+  if (!image || image.type !== 'image' || beforeBlockId === imageId) return blocks;
+  const remaining = blocks.filter((block) => block.id !== imageId);
+  const targetIndex = beforeBlockId === null ? -1 : remaining.findIndex((block) => block.id === beforeBlockId);
+  const insertIndex = targetIndex < 0 ? remaining.length : targetIndex;
+  const placed: InlineImageBlock = { ...image, wrap };
+  delete placed.offsetX;
+  delete placed.offsetY;
+  if (wrap === 'none') delete placed.wrap;
+  const next = [...remaining];
+  next.splice(insertIndex, 0, placed);
+  if (wrap !== 'none' && next[insertIndex + 1]?.type !== 'paragraph') {
+    next.splice(insertIndex + 1, 0, { id: newParagraphId, type: 'paragraph', text: '' });
+  }
+  return next;
 }

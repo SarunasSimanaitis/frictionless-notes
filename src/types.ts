@@ -57,7 +57,11 @@ export interface InlineImageBlock {
   offsetX?: number;
   /** Vertical image offset as a fraction of the note content width. */
   offsetY?: number;
+  /** How text flows around the image: centered on its own line, or floated left/right with text wrapping beside it. */
+  wrap?: ImageWrap;
 }
+
+export type ImageWrap = 'none' | 'left' | 'right';
 
 export type NoteBlock = ParagraphBlock | EmbeddedChecklistBlock | InlineImageBlock;
 

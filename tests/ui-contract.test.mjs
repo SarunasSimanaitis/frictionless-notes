@@ -30,6 +30,7 @@ const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.me
 const easConfig = JSON.parse(readFileSync(new URL('../eas.json', import.meta.url), 'utf8'));
 const imageStorageSource = readFileSync(new URL('../src/noteImages.ts', import.meta.url), 'utf8');
 const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingToolbar.tsx', import.meta.url), 'utf8');
+const inlineImageSource = readFileSync(new URL('../src/editor/InlineNoteImage.tsx', import.meta.url), 'utf8');
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
 const editorViteConfigSource = readFileSync(new URL('../editor-web/vite.config.ts', import.meta.url), 'utf8');
 const draggableFlatListSource = readFileSync(new URL('../node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx', import.meta.url), 'utf8');
@@ -168,9 +169,9 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(editorViteConfigSource, /replacement: '@10play\/tentap-editor\/web'/);
   assert.match(customNoteCssSource, /font-size:20px/);
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
-  assert.match(textDocumentSource, /resizeCorners\.map\(\(corner\) =>/);
-  assert.match(textDocumentSource, /Drag corner to resize image|Resize image from/);
-  assert.doesNotMatch(textDocumentSource, /Make image smaller|Make image larger|>Smaller<|>Larger</);
+  assert.match(inlineImageSource, /handles\.map\(\(handle\) =>/);
+  assert.match(inlineImageSource, /Resize image from/);
+  assert.doesNotMatch(inlineImageSource, /Make image smaller|Make image larger|>Smaller<|>Larger</);
   assert.doesNotMatch(textDocumentSource, /inlineImageMoveControls|inlineImageMoveGlyph/);
   assert.match(backButtonSource, /appStyles\.backArrow/);
   for (const source of [noteEditorSource, settingsSource, reminderSource]) {
@@ -185,17 +186,17 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(stylesSource, /documentInsertButton:\s*\{\s*minHeight: 44/);
   assert.match(reminderSource, /reminderAction: \{ minWidth: 62, minHeight: 48/);
   assert.match(settingsSource, /systemSettingsButton: \{ alignSelf: 'flex-start', minHeight: 48/);
-  assert.match(textDocumentSource, /Math\.max\(0\.2, Math\.min\(1\.5, image\.scale \?\? 1\)\)/);
-  assert.match(textDocumentSource, /resizeCorners\.map\(\(corner\) =>/);
-  assert.match(textDocumentSource, /const handleImageLongPress = \(\) => \{/);
-  assert.match(textDocumentSource, /onLongPress=\{handleImageLongPress\}/);
-  assert.match(textDocumentSource, /dragEnabledRef\.current = true/);
-  assert.match(textDocumentSource, /imageSelected \? resizeCorners\.map/);
-  assert.match(textDocumentSource, /imageSelected \? \([\s\S]*?Replace image[\s\S]*?Remove image[\s\S]*?Done editing image/);
-  assert.match(textDocumentSource, /PanResponder\.create/);
-  assert.match(textDocumentSource, /offsetX: next\.x, offsetY: next\.y/);
-  assert.match(textDocumentSource, /accessibilityLabel="Hold and drag to move image"/);
-  assert.match(textDocumentSource, /accessibilityActions=\{\[[\s\S]*?Move image left[\s\S]*?Move image down[\s\S]*?\]\}/);
+  // Samsung Notes-style images: tap to select, 8 edge/corner handles, hold-and-drag to place, text wrapping.
+  assert.match(inlineImageSource, /const handles: Handle\[\] = \['topLeft', 'top', 'topRight', 'right', 'bottomRight', 'bottom', 'bottomLeft', 'left'\]/);
+  assert.match(inlineImageSource, /selected \? \([\s\S]*?handles\.map/);
+  assert.match(inlineImageSource, /Gesture\.Pan\(\)[\s\S]*?\.activateAfterLongPress\(350\)/);
+  assert.match(inlineImageSource, /Gesture\.Exclusive\(move, tap\)/);
+  assert.match(inlineImageSource, /Replace image[\s\S]*?Remove image[\s\S]*?Done editing image/);
+  assert.match(inlineImageSource, /accessibilityActions=\{\[[\s\S]*?Move image up[\s\S]*?Move image right[\s\S]*?\]\}/);
+  assert.match(textDocumentSource, /placeImageBlock\(blocksRef\.current, imageId, beforeBlockId, wrap, createId\(\)\)/);
+  assert.match(textDocumentSource, /\.ProseMirror::before\{content:"";float:\$\{floatSide\}/);
+  assert.match(textDocumentSource, /scrollEnabled=\{drop === null && imagePreview === null\}/);
+  assert.match(formattingToolbarSource, /<ImageIcon color=\{palette\.ink\} \/>/);
   assert.doesNotMatch(textDocumentSource, /Hold image to drag/);
   assert.match(homeScreenSource, /backgroundColor: palette\.accentSoft, shadowColor: palette\.accent/);
   assert.match(stylesSource, /noteRowPinned:\s*\{[\s\S]*?backgroundColor: palette\.accentSoft,[\s\S]*?borderWidth: 0,[\s\S]*?borderBottomWidth: 0,[\s\S]*?shadowColor: palette\.accent/);
@@ -203,9 +204,8 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(settingsSource, /trackColor=\{\{ false: palette\.line, true: palette\.accentSoft \}\}/);
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.android.buildType, 'apk');
-  assert.match(textDocumentSource, /onError=\{\(\) => setImageUnavailable\(true\)\}/);
-  assert.match(textDocumentSource, /Image unavailable on this device/);
-  assert.match(textDocumentSource, /accessibilityLabel="Image unavailable on this device\. Replace or remove it\."/);
+  assert.match(inlineImageSource, /onError=\{onUnavailable\}/);
+  assert.match(inlineImageSource, /Image unavailable on this device/);
   assert.match(schemaSource, /appearance_json TEXT/);
   assert.match(schemaSource, /ALTER TABLE notes ADD COLUMN appearance_json TEXT/);
   assert.match(schemaSource, /ALTER TABLE notes ADD COLUMN deleted_at INTEGER/);
@@ -217,9 +217,9 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
 });
 
 test('Custom Notes keep continuous scrolling as the default while pagination is deferred', () => {
-  assert.match(textDocumentSource, /<ScrollView[\s\S]*?note\.blocks\.map\(\(block\)/);
+  assert.match(textDocumentSource, /<ScrollView[\s\S]*?units\.map\(\(unit\)/);
   assert.match(textDocumentSource, /keyboardShouldPersistTaps="always"/);
-  assert.match(textDocumentSource, /block\.type === 'checklist'[\s\S]*?<EmbeddedChecklistEditor[\s\S]*?<InlineNoteImage/);
+  assert.match(textDocumentSource, /first\.type === 'checklist'[\s\S]*?<EmbeddedChecklistEditor[\s\S]*?renderImage\(first\)/);
   assert.match(stylesSource, /documentScroll:\s*\{\s*flex:\s*1,\s*minHeight:\s*0,?\s*\}/);
   assert.match(stylesSource, /documentContent:\s*\{\s*flexGrow:\s*1,[^}]*\}/);
   assert.match(documentEditorSource, /dynamicHeight:\s*true/);

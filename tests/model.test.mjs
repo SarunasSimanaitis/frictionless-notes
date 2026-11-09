@@ -28,6 +28,7 @@ import {
   reorderItem,
   readNoteAppearance,
   readNoteBlocks,
+  placeImageBlock,
   removeChecklistItem,
   richHtmlToPlainText,
   searchNotes,
@@ -614,4 +615,28 @@ test('SQLite stores custom-note mode without changing the legacy constrained not
   assert.equal(decodeNoteType(saved.type, saved.editor_mode), 'custom');
   assert.equal(readNoteBlocks(saved.blocks_json, saved.body, note.id)[0].text, '');
   database.close();
+});
+
+test('images can be dropped anywhere in a note and wrapped images always have text beside them', () => {
+  const image = { id: 'img', type: 'image', uri: 'file:///app/note-images/a.jpg', width: 800, height: 600, offsetX: 0.2, offsetY: 0.1 };
+  const blocks = [
+    { id: 'p1', type: 'paragraph', text: 'First' },
+    image,
+    { id: 'p2', type: 'paragraph', text: 'Second' },
+    { id: 'c1', type: 'checklist', items: [] },
+  ];
+  const movedUp = placeImageBlock(blocks, 'img', 'p1', 'left', 'new-p');
+  assert.deepEqual(movedUp.map((block) => block.id), ['img', 'p1', 'p2', 'c1']);
+  assert.equal(movedUp[0].wrap, 'left');
+  assert.equal(movedUp[0].offsetX, undefined);
+
+  const beforeChecklist = placeImageBlock(blocks, 'img', 'c1', 'right', 'new-p');
+  assert.deepEqual(beforeChecklist.map((block) => block.id), ['p1', 'p2', 'img', 'new-p', 'c1']);
+
+  const atEndInline = placeImageBlock(movedUp, 'img', null, 'none', 'new-p');
+  assert.deepEqual(atEndInline.map((block) => block.id), ['p1', 'p2', 'c1', 'img']);
+  assert.equal('wrap' in atEndInline[3], false);
+
+  assert.equal(readNoteBlocks(JSON.stringify([{ ...image, wrap: 'right' }]), '', 'n')[0].wrap, 'right');
+  assert.equal(readNoteBlocks(JSON.stringify([{ ...image, wrap: 'diagonal' }]), '', 'n')[0].wrap, undefined);
 });
