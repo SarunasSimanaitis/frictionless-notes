@@ -2,10 +2,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useMemo, useRef, useState } from 'react';
 import {
   Alert, Linking, Modal, Pressable, ScrollView, StyleSheet,
-  Switch, Text, TextInput, View,
+  Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackButton } from './BackButton';
+import { APP_NAME } from './brand';
+import { ThemedSwitch } from './ui/ThemedSwitch';
 import type { NotesRepository } from './repository';
 import { createReminder, dateAtTime, nextAfterWorkDate, selectPrimaryNoteReminder } from './model';
 import { cancelReminderNotifications, checkNotificationPermission, requestNotificationPermission, syncReminderNotification } from './notifications';
@@ -172,7 +174,7 @@ export function ReminderModal({
         : { text: 'Open settings', onPress: () => void Linking.openSettings() };
       Alert.alert(
         'Allow reminder notifications?',
-        'Frictionless Notes needs notification permission to alert you at this time. You can save the reminder without alerts too.',
+        `${APP_NAME} needs notification permission to alert you at this time. You can save the reminder without alerts too.`,
         [
           { text: 'Save without alerts', onPress: () => void commitReminder(false) },
           allowAction,
@@ -228,7 +230,7 @@ export function ReminderModal({
           };
       Alert.alert(
         'Allow reminder notifications?',
-        'Frictionless Notes needs notification permission to alert you at the reminder time. You can enable the saved reminder without alerts too.',
+        `${APP_NAME} needs notification permission to alert you at the reminder time. You can enable the saved reminder without alerts too.`,
         [
           { text: 'Keep disabled', style: 'cancel' },
           { text: 'Enable without alerts', onPress: () => void applyReminderToggle(reminder, true) },
@@ -300,7 +302,7 @@ export function ReminderModal({
 
         {creating ? (
           <ScrollView contentContainerStyle={styles.composer} keyboardShouldPersistTaps="handled">
-            <Text style={styles.eyebrow}>{note ? 'NOTE REMINDER' : 'QUICK REMINDER'}</Text>
+            <Text style={styles.eyebrow}>{note ? 'Reminder for this note' : 'Quick reminder'}</Text>
             <TextInput
               accessibilityLabel="Reminder message"
               value={title}
@@ -321,11 +323,11 @@ export function ReminderModal({
             <Text style={styles.sectionTitle}>Date and time</Text>
             <View style={styles.dateTimeRow}>
               <Pressable accessibilityRole="button" onPress={() => setPickerMode('date')} style={styles.dateTimeButton}>
-                <Text style={styles.dateTimeCaption}>DATE</Text>
+                <Text style={styles.dateTimeCaption}>Date</Text>
                 <Text style={styles.dateTimeValue}>{formatDate(scheduledDate)}</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={() => setPickerMode('time')} style={styles.dateTimeButton}>
-                <Text style={styles.dateTimeCaption}>TIME</Text>
+                <Text style={styles.dateTimeCaption}>Time</Text>
                 <Text style={styles.dateTimeValue}>{formatTime(scheduledDate)}</Text>
               </Pressable>
             </View>
@@ -350,12 +352,10 @@ export function ReminderModal({
                   <Text style={styles.sectionTitle}>Reminder enabled</Text>
                   <Text style={styles.scheduleHint}>Turn this off to keep the reminder without scheduling an alert.</Text>
                 </View>
-                <Switch
-                  accessibilityLabel="Enable this reminder"
+                <ThemedSwitch
+                  label="Enable this reminder"
                   value={editingReminder.enabled}
                   onValueChange={(enabled) => setEditingReminder({ ...editingReminder, enabled })}
-                  trackColor={{ false: '#D7D9D2', true: '#AFC8B7' }}
-                  thumbColor={editingReminder.enabled ? palette.accent : '#FFFFFF'}
                 />
               </View>
             ) : null}
@@ -408,13 +408,11 @@ export function ReminderModal({
                         <Text style={styles.reminderDate}>{formatDateTime(reminder.scheduledAt)}</Text>
                         <Text style={[styles.reminderStatus, !reminder.enabled && styles.disabledStatus]}>{stateLabel}</Text>
                       </Pressable>
-                      <Switch
-                        accessibilityLabel={`${reminder.enabled ? 'Disable' : 'Enable'} reminder ${reminder.title}`}
+                      <ThemedSwitch
+                        label={`${reminder.enabled ? 'Disable' : 'Enable'} reminder ${reminder.title}`}
                         value={reminder.enabled}
                         onValueChange={(enabled) => void toggleReminder(reminder, enabled)}
                         disabled={busy}
-                        trackColor={{ false: '#D7D9D2', true: '#AFC8B7' }}
-                        thumbColor={reminder.enabled ? palette.accent : '#FFFFFF'}
                       />
                     </View>
                     <View style={styles.reminderActions}>
@@ -437,7 +435,7 @@ export function ReminderModal({
             </ScrollView>
             {!note || listedReminders.length === 0 ? (
               <Pressable accessibilityRole="button" onPress={openNewReminder} style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}>
-                <Text style={styles.addButtonText}>＋ Add reminder</Text>
+                <Text style={styles.addButtonText}>Add reminder</Text>
               </Pressable>
             ) : null}
           </View>
@@ -457,52 +455,52 @@ function PresetButton({ title, onPress, wide = false }: { title: string; onPress
 
 const createStyles = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
-  header: { minHeight: 58, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { minHeight: 52, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
   headerAction: { minWidth: 88, minHeight: 48, flexDirection: 'row', alignItems: 'center' },
-  headerActionRight: { minWidth: 88, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
-  headerActionText: { color: palette.accent, fontSize: 15, fontWeight: '700' },
-  headerTitle: { color: palette.ink, fontSize: 18, fontWeight: '700' },
-  manager: { flex: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 18 },
-  contextTitle: { color: palette.ink, fontSize: 19, fontWeight: '700' },
-  contextDescription: { color: palette.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
-  permissionBanner: { padding: 13, marginTop: 14, borderRadius: 13, backgroundColor: palette.accentSoft },
+  headerActionRight: { minWidth: 88, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 12 },
+  headerActionText: { color: palette.accent, fontSize: 16, fontWeight: '700' },
+  headerTitle: { color: palette.ink, fontSize: 17, fontWeight: '700' },
+  manager: { flex: 1, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
+  contextTitle: { color: palette.ink, fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
+  contextDescription: { color: palette.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  permissionBanner: { padding: 14, marginTop: 14, borderRadius: 12, backgroundColor: palette.field },
   permissionBannerText: { color: palette.ink, fontSize: 13, lineHeight: 19 },
-  permissionLink: { color: palette.accent, fontSize: 13, fontWeight: '700', marginTop: 8 },
+  permissionLink: { color: palette.accent, fontSize: 14, fontWeight: '700', marginTop: 8 },
   reminderList: { flex: 1, marginTop: 14 },
   reminderListContent: { paddingBottom: 16 },
   reminderEmptyContent: { flexGrow: 1, justifyContent: 'center', paddingBottom: 18 },
-  reminderCard: { padding: 15, marginBottom: 10, borderRadius: 16, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
+  reminderCard: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line },
   reminderCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reminderCopy: { flex: 1, minHeight: 54, justifyContent: 'center' },
-  reminderTitle: { color: palette.ink, fontSize: 15, fontWeight: '600', lineHeight: 21 },
-  reminderDate: { color: palette.muted, fontSize: 12, marginTop: 4 },
-  reminderStatus: { color: palette.accent, fontSize: 11, fontWeight: '700', marginTop: 6 },
+  reminderTitle: { color: palette.ink, fontSize: 16, fontWeight: '600', lineHeight: 22 },
+  reminderDate: { color: palette.muted, fontSize: 13, marginTop: 3 },
+  reminderStatus: { color: palette.accent, fontSize: 12, fontWeight: '700', marginTop: 5 },
   disabledStatus: { color: palette.muted },
-  reminderActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 5 },
+  reminderActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 4 },
   reminderAction: { minWidth: 62, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  reminderActionText: { color: palette.accent, fontSize: 13, fontWeight: '700' },
-  deleteActionText: { color: palette.danger, fontSize: 13, fontWeight: '600' },
+  reminderActionText: { color: palette.ink, fontSize: 14, fontWeight: '700' },
+  deleteActionText: { color: palette.danger, fontSize: 14, fontWeight: '600' },
   emptyState: { alignItems: 'center', paddingHorizontal: 18 },
-  emptyTitle: { color: palette.ink, fontSize: 17, fontWeight: '700', marginBottom: 3 },
-  addButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: palette.accent },
-  addButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  composer: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 36 },
-  eyebrow: { color: palette.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.1, marginBottom: 8 },
-  messageInput: { minHeight: 52, color: palette.ink, fontSize: 18, paddingHorizontal: 13, borderRadius: 13, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
-  sectionTitle: { color: palette.ink, fontSize: 14, fontWeight: '700', marginTop: 22, marginBottom: 10 },
-  presetRow: { flexDirection: 'row', gap: 9, marginBottom: 9 },
-  presetButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9, borderRadius: 13, backgroundColor: palette.accentSoft },
+  emptyTitle: { color: palette.ink, fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginBottom: 3 },
+  addButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.accent },
+  addButtonText: { color: palette.onAccent, fontSize: 15, fontWeight: '700' },
+  composer: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 36 },
+  eyebrow: { color: palette.muted, fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  messageInput: { minHeight: 52, color: palette.ink, fontSize: 17, paddingHorizontal: 14, borderRadius: 12, backgroundColor: palette.field },
+  sectionTitle: { color: palette.ink, fontSize: 15, fontWeight: '700', marginTop: 24, marginBottom: 10 },
+  presetRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  presetButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, borderRadius: 22, backgroundColor: palette.field },
   presetButtonWide: { flex: 0, alignSelf: 'stretch', marginBottom: 3 },
-  presetButtonText: { color: palette.accent, fontSize: 13, fontWeight: '700', textAlign: 'center' },
-  dateTimeRow: { flexDirection: 'row', gap: 9 },
-  dateTimeButton: { flex: 1, minHeight: 65, justifyContent: 'center', paddingHorizontal: 13, borderRadius: 13, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line },
-  dateTimeCaption: { color: palette.faint, fontSize: 9, fontWeight: '700', letterSpacing: 1 },
-  dateTimeValue: { color: palette.ink, fontSize: 15, fontWeight: '600', marginTop: 5 },
-  scheduleHint: { color: palette.muted, fontSize: 12, lineHeight: 18, marginTop: 11 },
+  presetButtonText: { color: palette.ink, fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  dateTimeRow: { flexDirection: 'row', gap: 8 },
+  dateTimeButton: { flex: 1, minHeight: 64, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: palette.field },
+  dateTimeCaption: { color: palette.muted, fontSize: 11, fontWeight: '600' },
+  dateTimeValue: { color: palette.ink, fontSize: 16, fontWeight: '600', marginTop: 4 },
+  scheduleHint: { color: palette.muted, fontSize: 13, lineHeight: 18, marginTop: 12 },
   enableRow: { flexDirection: 'row', alignItems: 'center', marginTop: 22, gap: 12 },
   enableCopy: { flex: 1 },
   dimmed: { opacity: 0.5 },
-  pressed: { opacity: 0.75 },
+  pressed: { opacity: 0.6 },
 });
 
 const originalThemeMode = getThemeMode();

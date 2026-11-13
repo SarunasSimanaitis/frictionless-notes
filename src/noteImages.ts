@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { createId } from './model';
+import { runWithoutAppLock } from './security/deviceAuth';
 import type { InlineImageBlock, Note } from './types';
 
 const imageDirectoryName = 'note-images/';
@@ -15,12 +16,13 @@ function extensionForAsset(asset: ImagePicker.ImagePickerAsset): string {
 }
 
 export async function pickNoteImage(noteId: string): Promise<InlineImageBlock | null> {
-  const result = await ImagePicker.launchImageLibraryAsync({
+  // Choosing a photo leaves the app for a moment; that should not trigger App lock.
+  const result = await runWithoutAppLock(() => ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsEditing: false,
     quality: 0.9,
     selectionLimit: 1,
-  });
+  }));
   if (result.canceled || !result.assets[0]) return null;
 
   const documentDirectory = FileSystem.documentDirectory;

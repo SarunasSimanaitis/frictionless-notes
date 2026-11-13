@@ -29,6 +29,10 @@ const appConfig = JSON.parse(readFileSync(new URL('../app.json', import.meta.url
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const easConfig = JSON.parse(readFileSync(new URL('../eas.json', import.meta.url), 'utf8'));
 const imageStorageSource = readFileSync(new URL('../src/noteImages.ts', import.meta.url), 'utf8');
+const themedSwitchSource = readFileSync(new URL('../src/ui/ThemedSwitch.tsx', import.meta.url), 'utf8');
+const deviceAuthSource = readFileSync(new URL('../src/security/deviceAuth.ts', import.meta.url), 'utf8');
+const lockScreenSource = readFileSync(new URL('../src/security/LockScreen.tsx', import.meta.url), 'utf8');
+const modelSource = readFileSync(new URL('../src/model.ts', import.meta.url), 'utf8');
 const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingToolbar.tsx', import.meta.url), 'utf8');
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
 const editorViteConfigSource = readFileSync(new URL('../editor-web/vite.config.ts', import.meta.url), 'utf8');
@@ -108,10 +112,11 @@ test('standalone and embedded item edits and deletes preserve stable item identi
 
 test('Quick and Custom Notes stay distinct while sharing the structured offline document editor', () => {
   assert.match(noteLabelsSource, /custom: 'CUSTOM NOTE'/);
-  assert.match(homeScreenSource, /label="Quick note"[\s\S]*?onCreate\('text'\)/);
-  assert.match(homeScreenSource, /label="Blank custom note"[\s\S]*?onCreate\('custom', 'blank'\)/);
-  assert.match(homeScreenSource, /label="Plan template"[\s\S]*?onCreate\('custom', 'plan'\)/);
-  assert.match(homeScreenSource, /label="Journal template"[\s\S]*?onCreate\('custom', 'journal'\)/);
+  assert.match(homeScreenSource, /label="Quick note"[\s\S]*?create\('text'\)/);
+  assert.match(homeScreenSource, /label="Blank custom note"[\s\S]*?create\('custom', 'blank'\)/);
+  assert.match(homeScreenSource, /templateIds\.map\(\(templateId\) =>[\s\S]*?create\('custom', templateId\)/);
+  assert.match(homeScreenSource, /const templateIds: CustomNoteTemplateId\[\] = \['plan', 'journal', 'meeting', 'weekly', 'recipe'\]/);
+  assert.match(homeScreenSource, /const create = \(type: NoteType, templateId\?: CustomNoteTemplateId\) => \{[\s\S]*?onCreate\(type, templateId\);/);
   assert.match(noteEditorSource, /isDocumentNote\(note\.type\) \? \(/);
   assert.match(noteEditorSource, /<TextDocumentEditor[\s\S]*?firstParagraphInputRef=\{bodyRef\}/);
   assert.match(schemaSource, /type TEXT NOT NULL CHECK \(type IN \('text', 'checklist', 'shopping'\)\)/);
@@ -123,7 +128,7 @@ test('Quick and Custom Notes stay distinct while sharing the structured offline 
 
 test('ordinary notes insert a checklist at the focused cursor and retain text as ordered blocks', () => {
   assert.match(noteEditorSource, /<TextDocumentEditor[\s\S]*?onBlocksChange=\{\(blocks\) => updateDraft\(\{ blocks \}\)\}/);
-  assert.match(formattingToolbarSource, /ActionOption label="Checklist" accessibilityLabel="Insert checklist at the cursor" onPress=\{\(\) => \{ onInsertChecklist\(\)/);
+  assert.match(formattingToolbarSource, /ActionOption label="Checklist" accessibilityLabel="Insert checklist at the cursor" icon="checklist" onPress=\{\(\) => \{ onInsertChecklist\(\)/);
   assert.match(textDocumentSource, /onSelectionChange=\{\(\{ nativeEvent \}\) =>/);
   assert.match(textDocumentSource, /insertChecklistBlockAtSelection\([\s\S]*?createId\(\),[\s\S]*?createId\(\),/);
   assert.match(textDocumentSource, /focusAfterInsert\.current = result\.focusParagraphId/);
@@ -163,26 +168,41 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(formattingToolbarSource, /editor\.setHighlight\(color\)/);
   assert.match(formattingToolbarSource, /active\.editor\.setSelection\(selection\.from, selection\.to\)/);
   assert.match(formattingToolbarSource, /onAlignmentChange\(active\.blockId, alignment\)/);
-  assert.match(fontFormattingBridgeSource, /tiptapExtensionDeps: \[FontSize, TextStyle\]/);
+  assert.match(fontFormattingBridgeSource, /tiptapExtensionDeps: \[FontSize, TextStyle, HorizontalRule\]/);
+  assert.match(fontFormattingBridgeSource, /unsetAllMarks\(\)\.clearNodes\(\)/);
+  assert.match(fontFormattingBridgeSource, /setHorizontalRule\(\)/);
+  assert.equal(packageJson.dependencies['@tiptap/extension-horizontal-rule'], packageJson.dependencies['@tiptap/extension-text-style']);
   assert.match(fontFormattingBridgeSource, /editor\.chain\(\)\.focus\(\)/);
   assert.match(editorViteConfigSource, /replacement: '@10play\/tentap-editor\/web'/);
-  assert.match(customNoteCssSource, /font-size:20px/);
+  assert.match(customNoteCssSource, /appearance\.baseFontSize \?\? DEFAULT_CUSTOM_NOTE_FONT_SIZE/);
+  assert.match(customNoteCssSource, /pageInkColors\(background\)/);
+  // Custom Notes always show their tools; the setting only adds them to Quick Notes.
+  assert.match(textDocumentSource, /\{usesRichText \? \(\s*<FormattingToolbar/);
+  for (const label of ['Strikethrough', 'Bulleted list', 'Numbered list', 'Alignment and spacing', 'Page style', 'Undo', 'Redo']) {
+    assert.ok(formattingToolbarSource.includes(`label="${label}"`), `toolbar offers ${label}`);
+  }
+  assert.match(formattingToolbarSource, /editor\.clearFormatting\(\)/);
+  assert.match(formattingToolbarSource, /editor\.insertDivider\(\)/);
+  assert.match(formattingToolbarSource, /editor\.toggleBlockquote\(\)/);
   assert.doesNotMatch(textDocumentSource, /<Toolbar(?:\s|>)/);
   assert.match(textDocumentSource, /resizeCorners\.map\(\(corner\) =>/);
   assert.match(textDocumentSource, /Drag corner to resize image|Resize image from/);
   assert.doesNotMatch(textDocumentSource, /Make image smaller|Make image larger|>Smaller<|>Larger</);
   assert.doesNotMatch(textDocumentSource, /inlineImageMoveControls|inlineImageMoveGlyph/);
-  assert.match(backButtonSource, /appStyles\.backArrow/);
+  assert.match(backButtonSource, /<Icon name="chevronLeft"/);
+  assert.match(backButtonSource, /appStyles\.headerAction/);
   for (const source of [noteEditorSource, settingsSource, reminderSource]) {
     assert.match(source, /<BackButton/);
   }
-  assert.match(stylesSource, /backArrow:\s*\{\s*width: 18,[\s\S]*?fontSize: 22/);
+  assert.match(stylesSource, /headerAction:\s*\{\s*minWidth: 88,\s*minHeight: 48/);
+  assert.match(stylesSource, /iconButton:\s*\{\s*width: 48,\s*height: 48/);
   assert.match(settingsSource, /headerAction: \{ minWidth: 88, minHeight: 48/);
   assert.match(reminderSource, /headerAction: \{ minWidth: 88, minHeight: 48/);
   assert.match(reminderSource, /headerActionRight: \{ minWidth: 88, minHeight: 48/);
   assert.match(formattingToolbarSource, /button:\s*\{\s*minWidth: 48,\s*minHeight: 48/);
   assert.match(formattingToolbarSource, /actionOption:\s*\{\s*minHeight: 44/);
-  assert.match(stylesSource, /documentInsertButton:\s*\{\s*minHeight: 44/);
+  assert.match(stylesSource, /sheetAction:\s*\{\s*minHeight: 52/);
+  assert.match(stylesSource, /tabItem:\s*\{\s*flex: 1,\s*height: 50/);
   assert.match(reminderSource, /reminderAction: \{ minWidth: 62, minHeight: 48/);
   assert.match(settingsSource, /systemSettingsButton: \{ alignSelf: 'flex-start', minHeight: 48/);
   assert.match(textDocumentSource, /Math\.max\(0\.2, Math\.min\(1\.5, image\.scale \?\? 1\)\)/);
@@ -197,10 +217,16 @@ test('Custom Notes use a custom TenTap bundle for rich text and keep style and i
   assert.match(textDocumentSource, /accessibilityLabel="Hold and drag to move image"/);
   assert.match(textDocumentSource, /accessibilityActions=\{\[[\s\S]*?Move image left[\s\S]*?Move image down[\s\S]*?\]\}/);
   assert.doesNotMatch(textDocumentSource, /Hold image to drag/);
-  assert.match(homeScreenSource, /backgroundColor: palette\.accentSoft, shadowColor: palette\.accent/);
-  assert.match(stylesSource, /noteRowPinned:\s*\{[\s\S]*?backgroundColor: palette\.accentSoft,[\s\S]*?borderWidth: 0,[\s\S]*?borderBottomWidth: 0,[\s\S]*?shadowColor: palette\.accent/);
-  assert.doesNotMatch(stylesSource.match(/noteRowPinned:\s*\{([^}]*)\}/)?.[1] ?? '', /borderColor:/);
-  assert.match(settingsSource, /trackColor=\{\{ false: palette\.line, true: palette\.accentSoft \}\}/);
+  // Pinned rows are a flat tint: never an outline, never a shadow.
+  assert.match(homeScreenSource, /const highlighted = note\.isPinned && highlightPinned/);
+  assert.match(homeScreenSource, /\[styles\.noteRow, highlighted && styles\.noteRowPinned\]/);
+  assert.match(stylesSource, /noteRowPinned:\s*\{[\s\S]*?backgroundColor: palette\.accentSoft,[\s\S]*?borderWidth: 0,/);
+  assert.doesNotMatch(stylesSource.match(/noteRowPinned:\s*\{([^}]*)\}/)?.[1] ?? '', /borderColor:|shadow|elevation/);
+  assert.match(themedSwitchSource, /trackColor=\{\{ false: palette\.line, true: palette\.accent \}\}/);
+  for (const source of [settingsSource, reminderSource]) {
+    assert.match(source, /<ThemedSwitch/);
+    assert.doesNotMatch(source, /<Switch/);
+  }
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.android.buildType, 'apk');
   assert.match(textDocumentSource, /onError=\{\(\) => setImageUnavailable\(true\)\}/);
@@ -294,9 +320,9 @@ test('deleted notes remain recoverable for 30 days and can be restored or perman
 });
 
 test('reminder actions have clear, consistent labels on note and home screens', () => {
-  assert.match(homeScreenSource, /Manage reminders/);
-  assert.match(homeScreenSource, /<Text style=\{styles\.reminderHomeLabel\}>Reminders<\/Text>/);
-  assert.match(noteEditorSource, /<Text style=\{styles\.reminderHeaderText\}>Remind<\/Text>/);
+  assert.match(homeScreenSource, /<TabItem icon="bell" label="Manage reminders"/);
+  assert.match(noteEditorSource, /<IconButton icon="bell" label="Manage reminders for this note"/);
+  assert.match(noteEditorSource, /hasActiveReminder \? <View pointerEvents="none" style=\{styles\.reminderDot\} \/> : null/);
   assert.match(reminderSource, /accessibilityLabel=\{creating \? 'Back to reminders' : 'Back to notes'\}/);
 });
 test('all modal safe areas use react-native-safe-area-context', () => {
@@ -350,4 +376,61 @@ test('active-note deletion snapshots checklist rows before moving to Trash', () 
   assert.match(localRepositorySource, /replaceChecklistItems: database\.replaceChecklistItems/);
   assert.match(appSource, /await localNotesRepository\.replaceChecklistItems\(noteId, noteBeingDeleted\.items, noteBeingDeleted\.updatedAt\)/);
   assert.match(databaseSource, /export async function replaceChecklistItems/);
+});
+
+test('navigation lives in a bottom bar and note actions in one menu', () => {
+  for (const label of ['Notes', 'Manage reminders', 'Settings']) {
+    assert.ok(homeScreenSource.includes(`label="${label}"`), `tab bar offers ${label}`);
+  }
+  assert.match(homeScreenSource, /accessibilityLabel="Create a note"/);
+  assert.match(homeScreenSource, /label=\{`Open Trash, \$\{trashedNotes\.length\} notes`\}/);
+  assert.match(homeScreenSource, /keyboardVisible \? null : \(/);
+  assert.match(homeScreenSource, /onLongPress=\{\(\) => onMore\(note\)\}/);
+  for (const action of ['onTogglePin', 'onToggleLock', 'onShare', 'onDuplicate', 'onDelete']) {
+    assert.ok(homeScreenSource.includes(`runNoteAction(${action})`), `note menu offers ${action}`);
+  }
+  assert.match(homeScreenSource, /filterNotes\(notes, activeFilter, new Set\(remindersByNote\.keys\(\)\)\), query, preferences\.sortMode/);
+});
+
+test('moving a note to Trash is immediate and can be undone', () => {
+  assert.match(appSource, /showToast\('Moved to Trash', 'Undo', \(\) => void handleRestore\(\{ \.\.\.noteBeingDeleted, deletedAt \}\)\)/);
+  assert.doesNotMatch(appSource, /Move to Trash\?/);
+  assert.doesNotMatch(noteEditorSource, /Move to Trash\?/);
+});
+
+test('App lock and locked notes rely on the device lock and never trap the user', () => {
+  assert.equal(packageJson.dependencies['expo-local-authentication'] !== undefined, true);
+  assert.match(deviceAuthSource, /disableDeviceFallback: false/);
+  assert.match(deviceAuthSource, /SecurityLevel\.NONE/);
+  assert.match(deviceAuthSource, /export async function runWithoutAppLock/);
+  assert.match(imageStorageSource, /runWithoutAppLock\(\(\) => ImagePicker\.launchImageLibraryAsync/);
+  assert.match(appSource, /if \(loadedPreferences\.appLockEnabled\) setLocked\(true\)/);
+  assert.match(appSource, /Date\.now\(\) - awaySince >= APP_LOCK_GRACE_MS/);
+  assert.match(appSource, /!isAppLockSuppressed\(\)/);
+  assert.match(appSource, /<Modal visible=\{locked\}[\s\S]*?<LockScreen onUnlocked=\{\(\) => setLocked\(false\)\} onUnavailable=\{handleDeviceLockRemoved\}/);
+  assert.match(lockScreenSource, /else if \(outcome === 'unavailable'\) callbacks\.current\.onUnavailable\(\)/);
+  // A cancelled prompt must not reopen itself: `unlock` has no changing dependencies.
+  assert.match(lockScreenSource, /const unlock = useCallback\(async \(\) => \{[\s\S]*?\}, \[\]\);/);
+  assert.match(lockScreenSource, /Date\.now\(\) - promptEndedAt\.current > 1_500/);
+  assert.match(appSource, /if \(target\.isLocked && !wasRecentlyAuthenticated\(\)\)/);
+  assert.match(appSource, /preventScreenCaptureAsync\(\)/);
+  assert.match(settingsSource, /<ThemedSwitch label="App lock" value=\{preferences\.appLockEnabled\} onValueChange=\{onAppLockChange\} \/>/);
+  assert.match(homeScreenSource, /if \(note\.isLocked\) return 'Locked'/);
+  assert.match(modelSource, /note\.isLocked\s*\? \[note\.title\]/);
+  assert.match(schemaSource, /ALTER TABLE notes ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0/);
+  assert.match(databaseSource, /note\.isLocked \? 1 : 0/);
+});
+
+test('the theme can follow the device and every page colour keeps readable text', () => {
+  assert.equal(appConfig.expo.userInterfaceStyle, 'automatic');
+  assert.match(appSource, /resolveThemeMode\(preferences\.themeMode, useColorScheme\(\)\)/);
+  assert.match(documentEditorSource, /const pageInk = pageInkColors\(pageColor\)/);
+  assert.match(documentEditorSource, /inkColor=\{usesRichText \? pageInk\.ink : undefined\}/);
+});
+
+test('lists show progress and can be reset or cleared in one tap', () => {
+  assert.match(checklistEditorSource, /const \{ done, total \} = checklistProgress\(note\.items\)/);
+  assert.match(checklistEditorSource, /accessibilityLabel="Uncheck all items" onPress=\{\(\) => void uncheckAll\(\)\}/);
+  assert.match(checklistEditorSource, /accessibilityLabel="Remove completed items" onPress=\{confirmClearChecked\}/);
+  assert.match(checklistEditorSource, /for \(const item of removed\) await repository\.deleteChecklistItem\(item\.id, note\.id, next\.updatedAt\)/);
 });

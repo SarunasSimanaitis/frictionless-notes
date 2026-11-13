@@ -1,7 +1,7 @@
 import { ChecklistItemLabel } from '../lists/ChecklistItemLabel';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 import {
-  Alert, Image, Keyboard, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputInstance, type ViewStyle,
+  Alert, Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputInstance, type ViewStyle,
 } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { RichText, TenTapStartKit, useBridgeState, useEditorBridge, useEditorContent, type EditorBridge, type EditorBridgeOptions } from '@10play/tentap-editor';
@@ -9,17 +9,20 @@ import { FormattingToolbar, type ActiveRichEditor } from './FormattingToolbar';
 import { NoteFontFormattingBridge } from './fontFormattingBridge';
 import { editorHtml } from '../../editor-web/build/editorHtml';
 import {
-  canAddChecklistItem, createEmbeddedChecklistBlock, createEmbeddedChecklistItem, createId, editChecklistItemText,
-  insertChecklistBlockAtSelection, normalizeItemPositions, removeChecklistItem, reorderItem, richHtmlToPlainText, toggleItem,
+  NOTE_BASE_FONT_SIZES, canAddChecklistItem, createEmbeddedChecklistBlock, createEmbeddedChecklistItem, createId, editChecklistItemText,
+  insertChecklistBlockAtSelection, noteBackgrounds, normalizeItemPositions, removeChecklistItem, reorderItem, richHtmlToPlainText, toggleItem,
 } from '../model';
 import { pickNoteImage, removeNoteImage } from '../noteImages';
-import { noteBackgroundColors, noteBackgroundLabels, noteMarginValues, palette } from '../theme';
+import { noteBackgroundColors, noteBackgroundLabels, noteMarginValues, pageInkColors, palette, resolvePageColor } from '../theme';
 import { styles } from '../styles';
 import type {
   EmbeddedChecklistBlock, EmbeddedChecklistItem, InlineImageBlock, Note, NoteAppearance, NoteBackground, NoteBlock,
-  NoteMargin, ParagraphBlock, ParagraphSpacing, PaperStyle,
+  NoteFont, NoteLineHeight, NoteMargin, ParagraphBlock, PaperStyle,
 } from '../types';
+import { Icon } from '../ui/Icon';
+import { Sheet } from '../ui/Sheet';
 import { customNoteCss } from './customNoteCss';
+import { DEFAULT_CUSTOM_NOTE_FONT_SIZE } from './formatting';
 
 type ShallowEditorThemeOptions = Omit<EditorBridgeOptions, 'theme'> & {
   theme?: { webview?: StyleProp<ViewStyle>; webviewContainer?: StyleProp<ViewStyle> };
@@ -50,7 +53,8 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   const [paragraphHeights, setParagraphHeights] = useState<Record<string, number>>({});
   const { width: viewportWidth } = useWindowDimensions();
   const firstParagraphId = note.blocks.find((block) => block.type === 'paragraph')?.id;
-  const pageColor = note.appearance.customBackgroundColor ?? (themeMode === 'dark' && note.appearance.background === 'warmWhite' ? palette.background : noteBackgroundColors[note.appearance.background]);
+  const pageColor = resolvePageColor(note.appearance, themeMode);
+  const pageInk = pageInkColors(pageColor);
   const pageMargin = isCustom ? noteMarginValues[note.appearance.margin] : 0;
 
   const updateActiveRichEditor = useCallback((
@@ -169,10 +173,13 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
 
   return (
     <View style={[styles.documentEditor, isCustom && styles.customDocumentEditor]}>
-      {quickNoteToolbarMode === 'advanced' ? (
+      {/* Custom Notes always carry their tools; Quick Notes only when rich formatting is switched on. */}
+      {usesRichText ? (
         <FormattingToolbar
           active={activeRichEditor}
           defaultFontFamily={note.appearance.font}
+          defaultFontSize={note.appearance.baseFontSize ?? DEFAULT_CUSTOM_NOTE_FONT_SIZE}
+          showPageStyle={isCustom}
           onAlignmentChange={updateParagraphAlignment}
           onSpacingChange={updateParagraphSpacing}
           onInsertChecklist={insertChecklist}
@@ -248,6 +255,8 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
             key={block.id}
             noteId={note.id}
             block={block}
+            inkColor={usesRichText ? pageInk.ink : undefined}
+            hintColor={usesRichText ? pageInk.faint : undefined}
             onItemsChange={(items) => onBlocksChange(note.blocks.map((candidate) =>
               candidate.id === block.id && candidate.type === 'checklist'
                 ? { ...candidate, items }
@@ -338,7 +347,7 @@ function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing,
   ) => void;
   onChange: (html: string, text: string) => void;
 }) {
-  const backgroundColor = appearance.customBackgroundColor ?? (themeMode === 'dark' && appearance.background === 'warmWhite' ? palette.background : noteBackgroundColors[appearance.background]);
+  const backgroundColor = resolvePageColor(appearance, themeMode);
   const editorTheme = {
     webview: { backgroundColor },
     webviewContainer: { backgroundColor },
@@ -401,110 +410,177 @@ function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing,
   );
 }
 
+const pageThemes: Array<{ label: string; background: NoteBackground; paper: PaperStyle; font: NoteFont }> = [
+  { label: 'Clean', background: 'warmWhite', paper: 'plain', font: 'sans' },
+  { label: 'Notebook', background: 'cream', paper: 'lined', font: 'serif' },
+  { label: 'Journal', background: 'sand', paper: 'dotted', font: 'serif' },
+  { label: 'Blueprint', background: 'blue', paper: 'grid', font: 'mono' },
+  { label: 'Blossom', background: 'pink', paper: 'plain', font: 'sans' },
+  { label: 'Night', background: 'graphite', paper: 'plain', font: 'sans' },
+  { label: 'Midnight', background: 'midnight', paper: 'dotted', font: 'mono' },
+];
+const pageFontFamilies: Record<NoteFont, string | undefined> = { sans: undefined, serif: 'serif', mono: 'monospace' };
+const pageFontLabels: Record<NoteFont, string> = { sans: 'Sans', serif: 'Serif', mono: 'Mono' };
+const lineHeightLabels: Record<NoteLineHeight, string> = { tight: 'Tight', normal: 'Normal', loose: 'Loose' };
+const textSizeLabels: Record<number, string> = { 16: 'Small', 18: 'Medium', 20: 'Large', 22: 'Extra large' };
+
 function PageStyleModal({ visible, appearance, onClose, onChange }: {
   visible: boolean;
   appearance: NoteAppearance;
   onClose: () => void;
   onChange: (appearance: NoteAppearance) => void;
 }) {
-  const [customColorDraft, setCustomColorDraft] = useState(appearance.customBackgroundColor ?? '#F7F6F1');
+  const [customColorDraft, setCustomColorDraft] = useState(appearance.customBackgroundColor ?? '');
   const setBackground = (background: NoteBackground) => onChange({ ...appearance, background, customBackgroundColor: undefined });
   const setCustomColor = (color: string) => {
-    const normalized = color.trim().startsWith('#') ? color.trim() : `#${color.trim()}`;
-    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) onChange({ ...appearance, customBackgroundColor: normalized });
+    const normalized = (color.trim().startsWith('#') ? color.trim() : `#${color.trim()}`).toUpperCase();
+    if (/^#[0-9A-F]{6}$/.test(normalized)) {
+      setCustomColorDraft(normalized);
+      onChange({ ...appearance, customBackgroundColor: normalized });
+    }
   };
-  const customColors = ['#F7F6F1', '#FFFFFF', '#F5E9D7', '#FBE1E8', '#E3F2E1', '#DDEBFA', '#E9E1FA', '#D5F2EF', '#242B35', '#343434', '#6B3442', '#2C4C3B'];
   const setPaper = (paper: PaperStyle) => onChange({ ...appearance, paper });
   const setMargin = (margin: NoteMargin) => onChange({ ...appearance, margin });
-  const backgrounds: NoteBackground[] = ['warmWhite', 'white', 'cream', 'pink', 'green', 'blue'];
   const papers: PaperStyle[] = ['plain', 'lined', 'dotted', 'grid'];
   const margins: NoteMargin[] = ['narrow', 'comfortable', 'wide'];
+  const baseFontSize = appearance.baseFontSize ?? DEFAULT_CUSTOM_NOTE_FONT_SIZE;
+  const lineHeight = appearance.lineHeight ?? 'normal';
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.pageStyleBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close page style" />
-        <View style={styles.pageStylePanel}>
-          <View style={styles.pageStyleHeader}>
-            <Text style={styles.pageStyleTitle}>Page style</Text>
-            <Pressable onPress={onClose} accessibilityRole="button" style={styles.pageStyleDoneButton}>
-              <Text style={styles.pageStyleDoneText}>Done</Text>
-            </Pressable>
-          </View>
-          <ScrollView keyboardShouldPersistTaps="always">
-            <Text style={styles.pageStyleLabel}>BACKGROUND</Text>
-            <View style={styles.pageStyleOptions}>
-              {backgrounds.map((background) => (
-                <Pressable
-                  key={background}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: appearance.background === background }}
-                  onPress={() => setBackground(background)}
-                  style={[styles.pageColorOption, appearance.background === background && styles.pageStyleOptionSelected]}
-                >
-                  <View style={[styles.pageColorSwatch, { backgroundColor: noteBackgroundColors[background] }]} />
-                  <Text style={styles.pageStyleOptionText}>{noteBackgroundLabels[background]}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.pageStyleLabel}>CUSTOM COLOR</Text>
-            <View style={styles.customColorGrid}>
-              {customColors.map((color) => (
-                <Pressable
-                  key={color}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Set page color ${color}`}
-                  accessibilityState={{ selected: (appearance.customBackgroundColor ?? '') === color }}
-                  onPress={() => { setCustomColorDraft(color); setCustomColor(color); }}
-                  style={[styles.customColorSwatch, { backgroundColor: color }, appearance.customBackgroundColor === color && styles.pageStyleOptionSelected]}
-                />
-              ))}
-            </View>
-            <View style={styles.customColorInputRow}>
-              <TextInput
-                accessibilityLabel="Custom page color hex value"
-                value={customColorDraft}
-                onChangeText={setCustomColorDraft}
-                onEndEditing={() => setCustomColor(customColorDraft)}
-                autoCapitalize="characters"
-                maxLength={7}
-                placeholder="#RRGGBB"
-                placeholderTextColor={palette.faint}
-                style={styles.customColorInput}
-              />
-              <Pressable accessibilityRole="button" onPress={() => setCustomColor(customColorDraft)} style={styles.pageStyleDoneButton}>
-                <Text style={styles.pageStyleDoneText}>Apply</Text>
+    <Sheet visible={visible} title="Page style" onClose={onClose} scrollable>
+      <View style={styles.pageStyleBody}>
+        <Text style={styles.pageStyleLabel}>Themes</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pageThemeRow}>
+          {pageThemes.map((theme) => {
+            const color = resolvePageColor({ background: theme.background });
+            const ink = pageInkColors(color);
+            const selected = !appearance.customBackgroundColor && appearance.background === theme.background &&
+              appearance.paper === theme.paper && appearance.font === theme.font;
+            return (
+              <Pressable
+                key={theme.label}
+                accessibilityRole="button"
+                accessibilityLabel={`${theme.label} page theme`}
+                accessibilityState={{ selected }}
+                onPress={() => onChange({ ...appearance, background: theme.background, paper: theme.paper, font: theme.font, customBackgroundColor: undefined })}
+                style={styles.pageThemeCard}
+              >
+                <View style={[styles.pageThemePreview, { backgroundColor: color }, selected && styles.pageThemePreviewSelected]}>
+                  <Text style={{ color: ink.ink, fontSize: 20, fontWeight: '700', fontFamily: pageFontFamilies[theme.font] }}>Aa</Text>
+                  <View style={[styles.pageThemeLine, { backgroundColor: ink.rule, width: '100%' }]} />
+                  <View style={[styles.pageThemeLine, { backgroundColor: ink.rule, width: '100%' }]} />
+                  <View style={[styles.pageThemeLine, { backgroundColor: ink.rule, width: '60%' }]} />
+                </View>
+                <Text style={styles.pageThemeLabel}>{theme.label}</Text>
               </Pressable>
-            </View>
-            <Text style={styles.pageStyleLabel}>PAPER</Text>
-            <View style={styles.pageStyleOptions}>
-              {papers.map((paper) => (
-                <PageStyleChoice
-                  key={paper}
-                  selected={appearance.paper === paper}
-                  label={paper[0].toUpperCase() + paper.slice(1)}
-                  onPress={() => setPaper(paper)}
-                />
-              ))}
-            </View>
-            <Text style={styles.pageStyleLabel}>MARGINS</Text>
-            <View style={styles.pageStyleOptions}>
-              {margins.map((margin) => (
-                <PageStyleChoice
-                  key={margin}
-                  selected={appearance.margin === margin}
-                  label={margin === 'comfortable' ? 'Comfortable' : margin[0].toUpperCase() + margin.slice(1)}
-                  onPress={() => setMargin(margin)}
-                />
-              ))}
-            </View>
-          </ScrollView>
+            );
+          })}
+        </ScrollView>
+
+        <Text style={styles.pageStyleLabel}>Page colour</Text>
+        <View style={styles.pageSwatchGrid}>
+          {noteBackgrounds.map((background) => {
+            const color = resolvePageColor({ background });
+            // In the light theme the default page is already white, so the two share one swatch.
+            if (background === 'white' && color === resolvePageColor({ background: 'warmWhite' })) return null;
+            const selected = !appearance.customBackgroundColor && resolvePageColor(appearance) === color;
+            return (
+              <Pressable
+                key={background}
+                accessibilityRole="button"
+                accessibilityLabel={`${noteBackgroundLabels[background]} page colour`}
+                accessibilityState={{ selected }}
+                onPress={() => setBackground(background)}
+                style={[styles.pageSwatch, { backgroundColor: color }, selected && styles.pageSwatchSelected]}
+              >
+                {selected ? <Icon name="check" size={18} color={pageInkColors(color).ink} strokeWidth={2.4} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.customColorInputRow}>
+          <TextInput
+            accessibilityLabel="Custom page color hex value"
+            value={customColorDraft}
+            onChangeText={setCustomColorDraft}
+            onEndEditing={() => setCustomColor(customColorDraft)}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={7}
+            placeholder="Your own colour, e.g. #E9E1FA"
+            placeholderTextColor={palette.faint}
+            style={styles.customColorInput}
+          />
+          <Pressable accessibilityRole="button" accessibilityLabel="Apply custom page colour" onPress={() => setCustomColor(customColorDraft)} style={styles.pageStyleDoneButton}>
+            <Text style={styles.pageStyleDoneText}>Apply</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.pageStyleLabel}>Paper</Text>
+        <View style={styles.pageStyleOptions}>
+          {papers.map((paper) => (
+            <PageStyleChoice
+              key={paper}
+              selected={appearance.paper === paper}
+              label={paper[0].toUpperCase() + paper.slice(1)}
+              onPress={() => setPaper(paper)}
+            />
+          ))}
+        </View>
+
+        <Text style={styles.pageStyleLabel}>Font</Text>
+        <View style={styles.pageStyleOptions}>
+          {(Object.keys(pageFontLabels) as NoteFont[]).map((font) => (
+            <PageStyleChoice
+              key={font}
+              selected={appearance.font === font}
+              label={pageFontLabels[font]}
+              fontFamily={pageFontFamilies[font]}
+              onPress={() => onChange({ ...appearance, font })}
+            />
+          ))}
+        </View>
+
+        <Text style={styles.pageStyleLabel}>Text size</Text>
+        <View style={styles.pageStyleOptions}>
+          {NOTE_BASE_FONT_SIZES.map((size) => (
+            <PageStyleChoice
+              key={size}
+              selected={baseFontSize === size}
+              label={textSizeLabels[size]}
+              onPress={() => onChange({ ...appearance, baseFontSize: size })}
+            />
+          ))}
+        </View>
+
+        <Text style={styles.pageStyleLabel}>Line spacing</Text>
+        <View style={styles.pageStyleOptions}>
+          {(Object.keys(lineHeightLabels) as NoteLineHeight[]).map((option) => (
+            <PageStyleChoice
+              key={option}
+              selected={lineHeight === option}
+              label={lineHeightLabels[option]}
+              onPress={() => onChange({ ...appearance, lineHeight: option })}
+            />
+          ))}
+        </View>
+
+        <Text style={styles.pageStyleLabel}>Margins</Text>
+        <View style={styles.pageStyleOptions}>
+          {margins.map((margin) => (
+            <PageStyleChoice
+              key={margin}
+              selected={appearance.margin === margin}
+              label={margin[0].toUpperCase() + margin.slice(1)}
+              onPress={() => setMargin(margin)}
+            />
+          ))}
         </View>
       </View>
-    </Modal>
+    </Sheet>
   );
 }
 
-function PageStyleChoice({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
+function PageStyleChoice({ selected, label, fontFamily, onPress }: { selected: boolean; label: string; fontFamily?: string; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -512,7 +588,7 @@ function PageStyleChoice({ selected, label, onPress }: { selected: boolean; labe
       onPress={onPress}
       style={[styles.pageStyleChoice, selected && styles.pageStyleOptionSelected]}
     >
-      <Text style={[styles.pageStyleOptionText, selected && styles.pageStyleOptionTextSelected]}>{label}</Text>
+      <Text style={[styles.pageStyleOptionText, fontFamily ? { fontFamily } : null, selected && styles.pageStyleOptionTextSelected]}>{label}</Text>
     </Pressable>
   );
 }
@@ -721,7 +797,7 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
               source={{ uri: image.uri }}
               resizeMode="contain"
               onError={() => setImageUnavailable(true)}
-              style={{ width: imageWidth, height: imageHeight, borderRadius: 8 }}
+              style={{ width: imageWidth, height: imageHeight, borderRadius: 12 }}
             />
           </Pressable>
           {imageSelected ? resizeCorners.map((corner) => (
@@ -770,9 +846,12 @@ function InlineNoteImage({ noteId, image, blocks, availableWidth, onBlocksCommit
   );
 }
 
-function EmbeddedChecklistEditor({ noteId, block, onItemsChange, onRemove }: {
+function EmbeddedChecklistEditor({ noteId, block, inkColor, hintColor, onItemsChange, onRemove }: {
   noteId: string;
   block: EmbeddedChecklistBlock;
+  /** Text and hint colours for a page whose background differs from the app's. */
+  inkColor?: string;
+  hintColor?: string;
   onItemsChange: (items: EmbeddedChecklistItem[]) => void;
   onRemove: () => void;
 }) {
@@ -858,9 +937,9 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, onRemove }: {
           style={({ pressed }) => [styles.embeddedChecklistToggleArea, pressed && styles.rowPressed]}
         >
           <View style={[styles.embeddedChecklistCheckbox, item.checked && styles.checkboxChecked]}>
-            {item.checked ? <Text style={styles.checkmark}>✓</Text> : null}
+            {item.checked ? <Icon name="check" size={13} color={palette.onAccent} strokeWidth={2.8} /> : null}
           </View>
-          <ChecklistItemLabel text={item.text} checked={item.checked} />
+          <ChecklistItemLabel text={item.text} checked={item.checked} color={inkColor} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -868,7 +947,7 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, onRemove }: {
           onPress={() => { setEditingItemId(item.id); setEditingText(item.text); }}
           style={({ pressed }) => [styles.editItemButton, pressed && styles.pressed]}
         >
-          <Text style={styles.editItemGlyph}>✎</Text>
+          <Icon name="pen" size={18} color={hintColor ?? palette.faint} />
         </Pressable>
       </View>
     );
@@ -895,9 +974,9 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, onRemove }: {
           onSubmitEditing={({ nativeEvent }) => addItem(nativeEvent.text ?? newItemText)}
           submitBehavior="submit"
           placeholder="Add checklist item"
-          placeholderTextColor={palette.faint}
+          placeholderTextColor={hintColor ?? palette.faint}
           returnKeyType="done"
-          style={styles.embeddedItemInput}
+          style={[styles.embeddedItemInput, inkColor ? { color: inkColor } : null]}
         />
         <Pressable
           accessibilityRole="button"
@@ -906,10 +985,10 @@ function EmbeddedChecklistEditor({ noteId, block, onItemsChange, onRemove }: {
           onPress={() => addItem(newItemText)}
           style={({ pressed }) => [styles.embeddedAddItemButton, pressed && styles.pressed, !canAddChecklistItem(newItemText) && styles.addItemDisabled]}
         >
-          <Text style={styles.embeddedAddItemButtonText}>+</Text>
+          <Icon name="plus" size={20} color={palette.accent} strokeWidth={2.2} />
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Remove checklist" onPress={onRemove} hitSlop={8} style={styles.embeddedRemoveButton}>
-          <Text style={styles.mutedActionText}>×</Text>
+          <Icon name="close" size={16} color={hintColor ?? palette.faint} />
         </Pressable>
       </View>
     </View>

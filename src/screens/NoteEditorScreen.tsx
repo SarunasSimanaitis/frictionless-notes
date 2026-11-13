@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { EditorBridge } from '@10play/tentap-editor';
 import type { NotesRepository } from '../repository';
 import {
+  checklistProgress,
+  countWords,
   isDocumentNote,
   updateNoteDraft,
 } from '../model';
@@ -24,11 +26,14 @@ import { ReminderModal } from '../ReminderModal';
 import { removeNoteImage } from '../noteImages';
 import { TextDocumentEditor } from '../editor/DocumentEditor';
 import { ChecklistEditor } from '../lists/ChecklistEditor';
-import { palette } from '../theme';
+import { palette, type ThemeMode } from '../theme';
 import { styles } from '../styles';
 import { BackButton } from '../BackButton';
-import { ReminderIcon } from '../ReminderIcon';
 import { noteTypeLabels } from '../noteLabels';
+import { authenticate, isDeviceLockAvailable } from '../security/deviceAuth';
+import { Icon } from '../ui/Icon';
+import { IconButton } from '../ui/IconButton';
+import { Sheet, SheetAction } from '../ui/Sheet';
 import type { NotificationPermission } from '../notifications';
 import type { AppPreferences, Note, NoteBlock, Reminder } from '../types';
 interface NoteEditorProps {
@@ -36,17 +41,20 @@ interface NoteEditorProps {
   repository: NotesRepository;
   reminders: Reminder[];
   preferences: AppPreferences;
+  themeMode: ThemeMode;
   permission: NotificationPermission;
   onRemindersChanged: () => void;
   onPermissionChanged: (permission: NotificationPermission) => void;
   onBack: () => void;
   onSaved: (note: Note) => void;
   onDelete: (note: Note) => void;
+  onDuplicate: (note: Note) => void;
+  onShare: (note: Note) => void;
 }
 
 export function NoteEditorScreen({
-  note: initialNote, repository, reminders, preferences, permission, onRemindersChanged,
-  onPermissionChanged, onBack, onSaved, onDelete,
+  note: initialNote, repository, reminders, preferences, themeMode, permission, onRemindersChanged,
+  onPermissionChanged, onBack, onSaved, onDelete, onDuplicate, onShare,
 }: NoteEditorProps) {
   const [note, setNote] = useState(initialNote);
   const [saving, setSaving] = useState(false);
@@ -55,6 +63,7 @@ export function NoteEditorScreen({
   const pendingTextSaves = useRef(0);
 
   const [remindersOpen, setRemindersOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingSave = () => pendingListSaves.current > 0 || pendingTextSaves.current > 0 || saveTimer.current !== null;
   const noteRef = useRef(initialNote);
@@ -82,7 +91,7 @@ export function NoteEditorScreen({
     }
   }, [onSaved, repository]);
 
-  const updateDraft = useCallback((changes: Partial<Pick<Note, 'title' | 'body' | 'blocks' | 'appearance'>>) => {
+  const updateDraft = useCallback((changes: Partial<Pick<Note, 'title' | 'body' | 'blocks' | 'appearance' | 'isPinned' | 'isLocked'>>) => {
     const next = updateNoteDraft(noteRef.current, changes);
     noteRef.current = next;
     setNote(next);
@@ -149,6 +158,8 @@ export function NoteEditorScreen({
         ...persistedNote,
         title: current.title,
         body: current.body,
+        isPinned: current.isPinned,
+        isLocked: current.isLocked,
         items: success ? current.items : persistedNote.items,
       };
       noteRef.current = merged;
@@ -201,22 +212,41 @@ export function NoteEditorScreen({
     onBack();
   };
 
-  const confirmDelete = () => {
-    Alert.alert('Move to Trash?', 'This note will stay in Trash for 30 days before it is automatically deleted.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Move to Trash', style: 'destructive', onPress: () => {
-        // App-level deletion persists the latest note snapshot before moving it.
-        // Do not await pending checklist saves here: a stalled save must not trap
-        // the user inside a note or make the Trash action appear unresponsive.
-        Keyboard.dismiss();
-        onDelete(noteRef.current);
-      } },
-    ]);
+  const moveToTrash = () => {
+    // App-level deletion persists the latest note snapshot before moving it, and offers
+    // an Undo afterwards. Do not await pending checklist saves here: a stalled save must
+    // not trap the user inside a note or make the Trash action appear unresponsive.
+    setMenuOpen(false);
+    Keyboard.dismiss();
+    onDelete(noteRef.current);
+  };
+
+  const toggleLock = async () => {
+    setMenuOpen(false);
+    const current = noteRef.current;
+    if (!current.isLocked && !(await isDeviceLockAvailable())) {
+      Alert.alert('Set up a screen lock first', 'Locked notes use your phone’s fingerprint, face or PIN. Add a screen lock in system settings, then try again.');
+      return;
+    }
+    if ((await authenticate(current.isLocked ? 'Remove the lock from this note' : 'Lock this note')) !== 'success') return;
+    updateDraft({ isLocked: !current.isLocked });
+  };
+
+  const duplicate = () => {
+    setMenuOpen(false);
+    void persistCurrent();
+    onDuplicate(noteRef.current);
   };
 
   const openReminders = () => {
     setRemindersOpen(true);
   };
+
+  const hasActiveReminder = reminders.some((reminder) => reminder.noteId === note.id && reminder.enabled);
+  const progress = checklistProgress(note.items);
+  const details = `${isDocumentNote(note.type)
+    ? `${countWords(note.body)} words`
+    : `${progress.done} of ${progress.total} done`} · Created ${new Date(note.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
   return (
     <KeyboardAvoidingView
@@ -224,7 +254,7 @@ export function NoteEditorScreen({
       behavior={Platform.OS === 'web' ? undefined : 'padding'}
     >
       <SafeAreaView style={styles.screen}>
-        <StatusBar style={preferences.themeMode === 'dark' ? 'light' : 'dark'} />
+        <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
         <View style={styles.editorHeader}>
           <BackButton
             label="Notes"
@@ -232,23 +262,24 @@ export function NoteEditorScreen({
             onPress={() => void leaveEditor()}
             style={styles.headerAction}
           />
-          <Text style={styles.saveState}>{saving ? 'Saving…' : saveFailed ? 'Not saved' : 'Saved'}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Manage reminders for this note"
-            onPress={() => openReminders()}
-            style={({ pressed }) => [styles.reminderHeaderButton, pressed && styles.pressed]}
-          >
-            <ReminderIcon size={17} />
-            <Text style={styles.reminderHeaderText}>Remind</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Move note to Trash" onPress={confirmDelete} style={styles.headerActionRight}>
-            <Text style={styles.deleteText}>Trash</Text>
-          </Pressable>
+          <Text style={[styles.saveState, saveFailed && !saving && styles.saveStateFailed]} accessibilityLiveRegion="polite">
+            {saving ? 'Saving…' : saveFailed ? 'Not saved' : 'Saved'}
+          </Text>
+          <View style={styles.editorHeaderActions}>
+            <View>
+              <IconButton icon="bell" label="Manage reminders for this note" onPress={openReminders} />
+              {hasActiveReminder ? <View pointerEvents="none" style={styles.reminderDot} /> : null}
+            </View>
+            <IconButton icon="more" label="More note actions" onPress={() => { Keyboard.dismiss(); setMenuOpen(true); }} />
+          </View>
         </View>
 
-        <View style={styles.editorContent}>
-          <Text style={styles.editorType}>{noteTypeLabels[note.type]}</Text>
+        <View style={[styles.editorContent, note.type === 'custom' && styles.editorContentFlush]}>
+          <View style={styles.editorMeta}>
+            <Text style={styles.editorType}>{noteTypeLabels[note.type]}</Text>
+            {note.isPinned ? <Icon name="pin" size={13} color={palette.accent} /> : null}
+            {note.isLocked ? <Icon name="lock" size={13} color={palette.muted} /> : null}
+          </View>
           <TextInput
             accessibilityLabel="Note title"
             value={note.title}
@@ -256,7 +287,7 @@ export function NoteEditorScreen({
             placeholder={note.type === 'shopping' ? 'Shopping list' : note.type === 'custom' ? 'Custom note' : 'Title'}
             placeholderTextColor={palette.faint}
             returnKeyType="next"
-            blurOnSubmit={false}
+            submitBehavior="submit"
             onSubmitEditing={() => {
               if (note.type === 'custom') firstRichEditorRef.current?.focus('end');
               else if (isDocumentNote(note.type)) bodyRef.current?.focus();
@@ -275,7 +306,7 @@ export function NoteEditorScreen({
               onBlocksCommit={persistBlocksImmediately}
               onAppearanceChange={(appearance) => updateDraft({ appearance })}
               quickNoteToolbarMode={preferences.quickNoteToolbarMode}
-              themeMode={preferences.themeMode}
+              themeMode={themeMode}
             />
           ) : (
             <ChecklistEditor
@@ -288,6 +319,27 @@ export function NoteEditorScreen({
           )}
         </View>
       </SafeAreaView>
+      <Sheet
+        visible={menuOpen}
+        title={note.title.trim() || 'Untitled note'}
+        subtitle={details}
+        onClose={() => setMenuOpen(false)}
+      >
+        <SheetAction
+          icon="pin"
+          label={note.isPinned ? 'Unpin' : 'Pin to top'}
+          onPress={() => { setMenuOpen(false); updateDraft({ isPinned: !noteRef.current.isPinned }); }}
+        />
+        <SheetAction
+          icon={note.isLocked ? 'unlock' : 'lock'}
+          label={note.isLocked ? 'Remove lock' : 'Lock note'}
+          detail={note.isLocked ? undefined : 'Hide the preview and ask for your fingerprint or PIN to open'}
+          onPress={() => void toggleLock()}
+        />
+        <SheetAction icon="share" label="Share as text" onPress={() => { setMenuOpen(false); onShare(noteRef.current); }} />
+        <SheetAction icon="copy" label="Duplicate" onPress={duplicate} />
+        <SheetAction icon="trash" label="Move to Trash" danger onPress={moveToTrash} />
+      </Sheet>
       <ReminderModal
         repository={repository}
         visible={remindersOpen}

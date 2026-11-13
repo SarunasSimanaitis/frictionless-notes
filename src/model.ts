@@ -2,6 +2,7 @@ import type {
   AppPreferences, ChecklistItem, CustomNoteTemplateId, EmbeddedChecklistBlock,
   EmbeddedChecklistItem, Note, NoteBlock, NoteEditorMode, NoteType, ParagraphBlock,
   Reminder, StoredNoteType, NoteAppearance, NoteBackground, PaperStyle, NoteMargin, ParagraphSpacing,
+  NoteFilter, NoteLineHeight, NoteSortMode,
 } from './types';
 
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -14,17 +15,24 @@ export const defaultNoteAppearance: NoteAppearance = {
   font: 'sans',
 };
 
-const noteBackgrounds: NoteBackground[] = ['warmWhite', 'white', 'cream', 'pink', 'green', 'blue'];
+export const noteBackgrounds: NoteBackground[] = [
+  'warmWhite', 'white', 'cream', 'sand', 'pink', 'lavender', 'blue', 'green', 'graphite', 'midnight',
+];
 const paperStyles: PaperStyle[] = ['plain', 'lined', 'dotted', 'grid'];
 const noteMargins: NoteMargin[] = ['narrow', 'comfortable', 'wide'];
 const paragraphSpacings: ParagraphSpacing[] = ['compact', 'normal', 'relaxed'];
+const noteLineHeights: NoteLineHeight[] = ['tight', 'normal', 'loose'];
+export const NOTE_BASE_FONT_SIZES = [16, 18, 20, 22] as const;
 
 export const defaultPreferences: AppPreferences = {
   remindersEnabled: true,
   afterWorkTime: '17:30',
   highlightPinnedNotes: true,
-  themeMode: 'light',
+  themeMode: 'system',
   quickNoteToolbarMode: 'simple',
+  appLockEnabled: false,
+  screenPrivacy: false,
+  sortMode: 'updated',
 };
 
 export function createId(now = Date.now(), random = Math.random()): string {
@@ -56,13 +64,14 @@ export function createNote(
     checklist: 'New checklist',
     shopping: 'Shopping list',
   };
-  const customTemplates: Partial<Record<CustomNoteTemplateId, { title: string; paragraphs: string[] }>> = {
-    plan: { title: 'Personal plan', paragraphs: ['What I want to achieve', 'Next steps', 'Notes'] },
-    journal: { title: 'Journal entry', paragraphs: ['Today', 'What is on my mind', 'What I want to remember'] },
-  };
-  const template = type === 'custom' ? customTemplates[templateId] : undefined;
+  const template = type === 'custom' ? customNoteTemplates[templateId] : undefined;
   const blocks: NoteBlock[] = isDocumentNote(type)
-    ? (template?.paragraphs ?? ['']).map((text) => ({ id: createId(now), type: 'paragraph', text }))
+    ? (template?.blocks ?? ['']).map((block): NoteBlock => {
+        const blockId = createId(now);
+        if (typeof block === 'string') return { id: blockId, type: 'paragraph', text: block };
+        if (block.kind === 'checklist') return { id: blockId, type: 'checklist', items: [] };
+        return { id: blockId, type: 'paragraph', text: richHtmlToPlainText(block.html), richHtml: block.html };
+      })
     : [];
 
   return {
@@ -76,9 +85,45 @@ export function createNote(
     updatedAt: now,
     deletedAt: null,
     isPinned: false,
+    isLocked: false,
     items: [],
   };
 }
+
+type TemplateBlock = string | { kind: 'rich'; html: string } | { kind: 'checklist' };
+
+/** Starter documents for Custom Notes. Plain strings are editable paragraphs; rich blocks carry headings and lists. */
+export const customNoteTemplates: Partial<Record<CustomNoteTemplateId, { title: string; label: string; blocks: TemplateBlock[] }>> = {
+  plan: { title: 'Personal plan', label: 'Plan', blocks: ['What I want to achieve', 'Next steps', 'Notes'] },
+  journal: { title: 'Journal entry', label: 'Journal', blocks: ['Today', 'What is on my mind', 'What I want to remember'] },
+  meeting: {
+    title: 'Meeting notes',
+    label: 'Meeting',
+    blocks: [
+      { kind: 'rich', html: '<h2>Agenda</h2><ul><li><p>First topic</p></li></ul><h2>Notes</h2><p></p><h2>Action items</h2>' },
+      { kind: 'checklist' },
+      '',
+    ],
+  },
+  weekly: {
+    title: 'Weekly plan',
+    label: 'Week',
+    blocks: [
+      { kind: 'rich', html: '<h2>Top priorities</h2><ol><li><p>The one thing that matters most</p></li></ol><h2>Schedule</h2><p><strong>Mon</strong> </p><p><strong>Tue</strong> </p><p><strong>Wed</strong> </p><p><strong>Thu</strong> </p><p><strong>Fri</strong> </p><h2>To do</h2>' },
+      { kind: 'checklist' },
+      '',
+    ],
+  },
+  recipe: {
+    title: 'Recipe',
+    label: 'Recipe',
+    blocks: [
+      { kind: 'rich', html: '<p>Serves 2 · 30 min</p><h2>Ingredients</h2>' },
+      { kind: 'checklist' },
+      { kind: 'rich', html: '<h2>Method</h2><ol><li><p>First step</p></li></ol><h2>Notes</h2><p></p>' },
+    ],
+  },
+};
 
 export function createEmbeddedChecklistBlock(id = createId()): EmbeddedChecklistBlock {
   return { id, type: 'checklist', items: [] };
@@ -134,13 +179,17 @@ export function readNoteAppearance(serialized: string | null): NoteAppearance {
         ? parsed.paper as PaperStyle : defaultNoteAppearance.paper,
       margin: noteMargins.includes(parsed.margin as NoteMargin)
         ? parsed.margin as NoteMargin : defaultNoteAppearance.margin,
-      font: parsed.font === 'serif' ? 'serif' : defaultNoteAppearance.font,
+      font: parsed.font === 'serif' || parsed.font === 'mono' ? parsed.font : defaultNoteAppearance.font,
       ...(typeof parsed.customBackgroundColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.customBackgroundColor)
         ? { customBackgroundColor: parsed.customBackgroundColor } : {}),
       ...(Number.isFinite(Number(parsed.quickFontSize)) && Number(parsed.quickFontSize) >= 12 && Number(parsed.quickFontSize) <= 32
         ? { quickFontSize: Math.round(Number(parsed.quickFontSize)) } : {}),
       ...(typeof parsed.quickTextColor === 'string' && /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(parsed.quickTextColor)
         ? { quickTextColor: parsed.quickTextColor } : {}),
+      ...(Number.isFinite(Number(parsed.baseFontSize)) && Number(parsed.baseFontSize) >= 12 && Number(parsed.baseFontSize) <= 28
+        ? { baseFontSize: Math.round(Number(parsed.baseFontSize)) } : {}),
+      ...(noteLineHeights.includes(parsed.lineHeight as NoteLineHeight)
+        ? { lineHeight: parsed.lineHeight as NoteLineHeight } : {}),
     };
   } catch {
     return { ...defaultNoteAppearance };
@@ -450,7 +499,7 @@ export function normalizeNoteReminderGroups(reminders: Reminder[], now = Date.no
 
 export function updateNoteDraft(
   note: Note,
-  changes: Partial<Pick<Note, 'title' | 'body' | 'blocks' | 'appearance'>>,
+  changes: Partial<Pick<Note, 'title' | 'body' | 'blocks' | 'appearance' | 'isPinned' | 'isLocked'>>,
   updatedAt = Date.now(),
 ): Note {
   if (changes.blocks) {
@@ -477,25 +526,105 @@ export function trashDaysRemaining(deletedAt: number, now = Date.now()): number 
   return Math.max(0, Math.ceil((deletedAt + TRASH_RETENTION_MS - now) / MS_PER_DAY));
 }
 
-export function sortNotes(notes: Note[]): Note[] {
-  return [...notes].sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt - a.updatedAt);
+/** Pinned notes always lead; the chosen order applies within each group. */
+export function sortNotes(notes: Note[], mode: NoteSortMode = 'updated'): Note[] {
+  const byMode = (a: Note, b: Note): number => {
+    if (mode === 'created') return b.createdAt - a.createdAt;
+    if (mode === 'title') {
+      return a.title.trim().localeCompare(b.title.trim(), undefined, { sensitivity: 'base' }) || b.updatedAt - a.updatedAt;
+    }
+    return b.updatedAt - a.updatedAt;
+  };
+  return [...notes].sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || byMode(a, b));
 }
 
-export function searchNotes(notes: Note[], query: string): Note[] {
+/** Search covers titles, text and list items. A locked note only ever matches by its title. */
+export function searchNotes(notes: Note[], query: string, mode: NoteSortMode = 'updated'): Note[] {
   const normalized = query.trim().toLocaleLowerCase();
-  if (!normalized) return sortNotes(notes);
+  if (!normalized) return sortNotes(notes, mode);
 
-  return sortNotes(notes).filter((note) => {
-    const searchableText = [
-      note.title,
-      note.body,
-      ...note.items.map((item) => item.text),
-    ]
+  return sortNotes(notes, mode).filter((note) => {
+    const searchableText = (note.isLocked
+      ? [note.title]
+      : [note.title, note.body, ...note.items.map((item) => item.text)])
       .join('\n')
       .toLocaleLowerCase();
 
     return searchableText.includes(normalized);
   });
+}
+
+export function filterNotes(notes: Note[], filter: NoteFilter, noteIdsWithReminders: ReadonlySet<string> = new Set()): Note[] {
+  switch (filter) {
+    case 'notes': return notes.filter((note) => isDocumentNote(note.type));
+    case 'lists': return notes.filter((note) => !isDocumentNote(note.type));
+    case 'pinned': return notes.filter((note) => note.isPinned);
+    case 'reminders': return notes.filter((note) => noteIdsWithReminders.has(note.id));
+    case 'locked': return notes.filter((note) => note.isLocked);
+    default: return notes;
+  }
+}
+
+export function checklistProgress(items: Array<{ checked: boolean }>): { done: number; total: number } {
+  return { done: items.filter((item) => item.checked).length, total: items.length };
+}
+
+export function uncheckAllItems<T extends ChecklistItem>(items: T[]): T[] {
+  return items.map((item) => item.checked ? { ...item, checked: false } : item);
+}
+
+export function clearCheckedItems<T extends ChecklistItem>(items: T[]): T[] {
+  return normalizeItemPositions(items.filter((item) => !item.checked));
+}
+
+export function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+/** A plain-text version of a note for the system share sheet. */
+export function noteToShareText(note: Note): string {
+  const title = note.title.trim();
+  const checklistLine = (item: { text: string; checked: boolean }) => `${item.checked ? '[x]' : '[ ]'} ${item.text}`;
+  const content = isDocumentNote(note.type)
+    ? note.blocks.map((block) => block.type === 'paragraph'
+        ? (block.richHtml === undefined ? block.text : richHtmlToPlainText(block.richHtml))
+        : block.type === 'checklist' ? block.items.map(checklistLine).join('\n') : '')
+        .filter((text) => text.length > 0).join('\n\n')
+    : note.items.map(checklistLine).join('\n');
+  return [title, content].filter((part) => part.length > 0).join('\n\n');
+}
+
+/**
+ * An independent copy of a note with fresh IDs throughout. Images are left out because
+ * each image file belongs to exactly one note. Copies are never pinned or locked.
+ */
+export function duplicateNote(note: Note, now = Date.now(), id = createId(now)): Note {
+  const blocks: NoteBlock[] = note.blocks.flatMap((block): NoteBlock[] => {
+    if (block.type === 'image') return [];
+    const blockId = createId();
+    if (block.type === 'checklist') {
+      return [{ ...block, id: blockId, items: block.items.map((item) => ({ ...item, id: createId(), noteId: id, blockId })) }];
+    }
+    return [{ ...block, id: blockId }];
+  });
+  const safeBlocks = isDocumentNote(note.type) && !blocks.some((block) => block.type === 'paragraph')
+    ? [...blocks, { id: createId(), type: 'paragraph' as const, text: '' }]
+    : blocks;
+  const title = note.title.trim();
+  return {
+    ...note,
+    id,
+    title: title ? `${title} (copy)` : 'Copy',
+    blocks: safeBlocks,
+    body: isDocumentNote(note.type) ? flattenNoteBlocks(safeBlocks) : note.body,
+    appearance: { ...note.appearance },
+    items: note.items.map((item, position) => ({ ...item, id: createId(), noteId: id, position })),
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+    isPinned: false,
+    isLocked: false,
+  };
 }
 
 export function selectionForDocument(text: string, requestedOffset: number): number {

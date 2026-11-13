@@ -5,7 +5,16 @@ import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  checklistProgress,
+  clearCheckedItems,
+  countWords,
   createNote,
+  customNoteTemplates,
+  defaultPreferences,
+  duplicateNote,
+  filterNotes,
+  noteToShareText,
+  uncheckAllItems,
   isTrashExpired,
   trashDaysRemaining,
   TRASH_RETENTION_MS,
@@ -613,5 +622,162 @@ test('SQLite stores custom-note mode without changing the legacy constrained not
   assert.equal(saved.type, 'text');
   assert.equal(decodeNoteType(saved.type, saved.editor_mode), 'custom');
   assert.equal(readNoteBlocks(saved.blocks_json, saved.body, note.id)[0].text, '');
+  database.close();
+});
+
+test('every starter template opens as an editable document with searchable text', () => {
+  for (const templateId of Object.keys(customNoteTemplates)) {
+    const note = createNote('custom', 10, `${templateId}-note`, templateId);
+    assert.equal(note.title, customNoteTemplates[templateId].title);
+    assert.ok(note.blocks.some((block) => block.type === 'paragraph'), `${templateId} has a paragraph to type in`);
+    assert.equal(note.body, flattenNoteBlocks(note.blocks));
+    assert.equal(new Set(note.blocks.map((block) => block.id)).size, note.blocks.length, `${templateId} block IDs are unique`);
+    assert.deepEqual(readNoteBlocks(JSON.stringify(note.blocks), '', note.id), note.blocks, `${templateId} survives a save and reload`);
+  }
+  const recipe = createNote('custom', 10, 'recipe-note', 'recipe');
+  assert.deepEqual(recipe.blocks.map((block) => block.type), ['paragraph', 'checklist', 'paragraph']);
+  assert.match(recipe.body, /Ingredients/);
+  assert.deepEqual(searchNotes([recipe], 'method').map((note) => note.id), ['recipe-note']);
+});
+
+test('page style additions parse safely and ignore out-of-range values', () => {
+  assert.deepEqual(readNoteAppearance(JSON.stringify({ background: 'midnight', font: 'mono', baseFontSize: 18, lineHeight: 'loose' })), {
+    background: 'midnight', paper: 'plain', margin: 'comfortable', font: 'mono', baseFontSize: 18, lineHeight: 'loose',
+  });
+  assert.deepEqual(readNoteAppearance(JSON.stringify({ background: 'neon', font: 'comic', baseFontSize: 400, lineHeight: 'huge' })), {
+    background: 'warmWhite', paper: 'plain', margin: 'comfortable', font: 'sans',
+  });
+});
+
+test('notes can be sorted by edit time, creation time or title while pins stay first', () => {
+  const apple = { ...createNote('text', 30, 'apple'), title: 'apple pie', updatedAt: 40 };
+  const zebra = { ...createNote('text', 10, 'zebra'), title: 'Zebra facts', updatedAt: 90 };
+  const mango = { ...createNote('text', 20, 'mango'), title: 'Mango', updatedAt: 50, isPinned: true };
+  assert.deepEqual(sortNotes([apple, zebra, mango], 'updated').map((note) => note.id), ['mango', 'zebra', 'apple']);
+  assert.deepEqual(sortNotes([apple, zebra, mango], 'created').map((note) => note.id), ['mango', 'apple', 'zebra']);
+  assert.deepEqual(sortNotes([zebra, apple, mango], 'title').map((note) => note.id), ['mango', 'apple', 'zebra']);
+  assert.equal(defaultPreferences.sortMode, 'updated');
+  assert.equal(defaultPreferences.themeMode, 'system');
+  assert.equal(defaultPreferences.appLockEnabled, false);
+});
+
+test('filters narrow the list by kind, pin, reminder and lock', () => {
+  const note = createNote('text', 1, 'note');
+  const custom = { ...createNote('custom', 2, 'custom'), isPinned: true };
+  const list = { ...createNote('checklist', 3, 'list'), isLocked: true };
+  const shopping = createNote('shopping', 4, 'shopping');
+  const all = [note, custom, list, shopping];
+  const ids = (filter, reminders) => filterNotes(all, filter, reminders).map((candidate) => candidate.id);
+  assert.deepEqual(ids('all'), ['note', 'custom', 'list', 'shopping']);
+  assert.deepEqual(ids('notes'), ['note', 'custom']);
+  assert.deepEqual(ids('lists'), ['list', 'shopping']);
+  assert.deepEqual(ids('pinned'), ['custom']);
+  assert.deepEqual(ids('locked'), ['list']);
+  assert.deepEqual(ids('reminders', new Set(['shopping'])), ['shopping']);
+  assert.deepEqual(ids('reminders'), []);
+});
+
+test('a locked note is found by its title only, never by its contents', () => {
+  const secret = {
+    ...createNote('checklist', 10, 'secret'),
+    title: 'Gift ideas',
+    body: 'surprise party',
+    isLocked: true,
+    items: [{ id: 'item', noteId: 'secret', text: 'Concert tickets', checked: false, position: 0 }],
+  };
+  assert.deepEqual(searchNotes([secret], 'gift').map((note) => note.id), ['secret']);
+  assert.deepEqual(searchNotes([secret], 'tickets'), []);
+  assert.deepEqual(searchNotes([secret], 'surprise'), []);
+  assert.deepEqual(searchNotes([{ ...secret, isLocked: false }], 'tickets').map((note) => note.id), ['secret']);
+});
+
+test('lists report progress and can be unchecked or cleared without touching other items', () => {
+  const items = [
+    { id: 'a', noteId: 'n', text: 'Milk', checked: true, position: 0 },
+    { id: 'b', noteId: 'n', text: 'Eggs', checked: false, position: 1 },
+    { id: 'c', noteId: 'n', text: 'Bread', checked: true, position: 2 },
+  ];
+  assert.deepEqual(checklistProgress(items), { done: 2, total: 3 });
+  assert.deepEqual(checklistProgress([]), { done: 0, total: 0 });
+  const unchecked = uncheckAllItems(items);
+  assert.deepEqual(unchecked.map((item) => item.checked), [false, false, false]);
+  assert.equal(unchecked[1], items[1], 'an item that was already unchecked is left as it is');
+  assert.deepEqual(clearCheckedItems(items), [{ id: 'b', noteId: 'n', text: 'Eggs', checked: false, position: 0 }]);
+  assert.equal(items.length, 3, 'the source list is not mutated');
+});
+
+test('a duplicate is an independent, unpinned, unlocked copy with fresh IDs', () => {
+  const original = {
+    ...createNote('shopping', 10, 'original'),
+    title: 'Weekly shop',
+    isPinned: true,
+    isLocked: true,
+    items: [
+      { id: 'a', noteId: 'original', text: 'Milk', checked: true, position: 0 },
+      { id: 'b', noteId: 'original', text: 'Eggs', checked: false, position: 1 },
+    ],
+  };
+  const copy = duplicateNote(original, 500, 'copy');
+  assert.equal(copy.id, 'copy');
+  assert.equal(copy.title, 'Weekly shop (copy)');
+  assert.equal(copy.createdAt, 500);
+  assert.equal(copy.isPinned, false);
+  assert.equal(copy.isLocked, false);
+  assert.deepEqual(copy.items.map((item) => [item.noteId, item.text, item.checked]), [['copy', 'Milk', true], ['copy', 'Eggs', false]]);
+  assert.ok(copy.items.every((item) => !['a', 'b'].includes(item.id)));
+  assert.equal(original.items[0].id, 'a', 'the original is not mutated');
+
+  const document = updateNoteDraft(createNote('custom', 10, 'doc'), { blocks: [
+    { id: 'p1', type: 'paragraph', text: 'Trip', richHtml: '<h2>Trip</h2>' },
+    { id: 'photo', type: 'image', uri: 'file:///app/note-images/trip.jpg', width: 10, height: 10 },
+    { id: 'list', type: 'checklist', items: [{ id: 'task', noteId: 'doc', blockId: 'list', text: 'Pack', checked: false, position: 0 }] },
+  ] }, 20);
+  const documentCopy = duplicateNote(document, 600, 'doc-copy');
+  assert.deepEqual(documentCopy.blocks.map((block) => block.type), ['paragraph', 'checklist'], 'image files are not shared between notes');
+  assert.equal(documentCopy.blocks[0].richHtml, '<h2>Trip</h2>');
+  assert.equal(documentCopy.blocks[1].items[0].noteId, 'doc-copy');
+  assert.equal(documentCopy.blocks[1].items[0].blockId, documentCopy.blocks[1].id);
+  assert.notEqual(documentCopy.blocks[1].id, 'list');
+  assert.equal(documentCopy.body, 'Trip\nPack');
+  assert.equal(duplicateNote({ ...createNote('text', 1, 'blank'), title: '  ' }, 2, 'x').title, 'Copy');
+});
+
+test('sharing turns a note into plain text with readable checklists', () => {
+  const list = {
+    ...createNote('shopping', 10, 'list'),
+    title: 'Groceries',
+    items: [
+      { id: 'a', noteId: 'list', text: 'Milk', checked: true, position: 0 },
+      { id: 'b', noteId: 'list', text: 'Eggs', checked: false, position: 1 },
+    ],
+  };
+  assert.equal(noteToShareText(list), 'Groceries\n\n[x] Milk\n[ ] Eggs');
+  const document = updateNoteDraft({ ...createNote('custom', 10, 'doc'), title: 'Trip' }, { blocks: [
+    { id: 'p1', type: 'paragraph', text: 'ignored', richHtml: '<p>Pack <strong>light</strong></p>' },
+    { id: 'list', type: 'checklist', items: [{ id: 'task', noteId: 'doc', blockId: 'list', text: 'Passport', checked: false, position: 0 }] },
+    { id: 'p2', type: 'paragraph', text: '' },
+  ] }, 20);
+  assert.equal(noteToShareText(document), 'Trip\n\nPack light\n\n[ ] Passport');
+  assert.equal(noteToShareText({ ...createNote('text', 1, 'empty'), title: '' }), '');
+  assert.equal(countWords('  one two\nthree  '), 3);
+  assert.equal(countWords(''), 0);
+});
+
+test('the lock flag is added to existing databases without disturbing saved notes', async () => {
+  const database = new DatabaseSync(':memory:');
+  database.exec(`CREATE TABLE notes (
+    id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, type TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  )`);
+  database.prepare('INSERT INTO notes (id, title, type, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run('old', 'Old note', 'text', 'Still here', 1, 2);
+  const adapter = {
+    getAllAsync: async (source) => database.prepare(source).all(),
+    execAsync: async (source) => { database.exec(source); },
+  };
+  await runDatabaseMigrations(adapter);
+  await runDatabaseMigrations(adapter);
+  const row = database.prepare('SELECT title, body, is_locked, is_pinned FROM notes WHERE id = ?').get('old');
+  assert.deepEqual({ ...row }, { title: 'Old note', body: 'Still here', is_locked: 0, is_pinned: 0 });
   database.close();
 });
