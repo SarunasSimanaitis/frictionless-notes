@@ -200,7 +200,7 @@ export function HomeScreen({
           </View>
         ) : (
           <View style={styles.topBar}>
-            <Text style={styles.wordmark} accessibilityRole="header">{APP_NAME}</Text>
+            <Text style={styles.wordmark} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{APP_NAME}</Text>
             <View style={styles.topBarActions}>
               <IconButton icon="sort" label={`Sort notes, currently by ${sortLabels[preferences.sortMode].toLowerCase()}`} onPress={() => setSortOpen(true)} />
             </View>

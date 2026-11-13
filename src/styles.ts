@@ -105,10 +105,11 @@ const createStyles = () => StyleSheet.create({
     justifyContent: 'space-between',
   },
   wordmark: {
+    flex: 1,
     color: palette.ink,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
-    letterSpacing: -1,
+    letterSpacing: -0.9,
   },
   topBarTitle: {
     flex: 1,

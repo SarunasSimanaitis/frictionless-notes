@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Lapelis",
+    "name": "Frictionless Notes",
     "slug": "frictionless-notes",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,14 +11,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Lapelis to add photos to your custom notes.",
+          "photosPermission": "Allow Frictionless Notes to add photos to your custom notes.",
           "microphonePermission": false
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Lapelis to use Face ID to unlock your notes."
+          "faceIDPermission": "Allow Frictionless Notes to use Face ID to unlock your notes."
         }
       ],
       "expo-system-ui"

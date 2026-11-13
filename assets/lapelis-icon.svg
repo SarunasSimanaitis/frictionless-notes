@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Lapelis: a small sheet of paper shaped like a leaf, with one tick. -->
-  <rect width="1024" height="1024" fill="#3B5BFF"/>
-  <path d="M332 212H542C663.500 212 762 310.500 762 432V742C762 780.700 730.700 812 692 812H482C360.500 812 262 713.500 262 592V282C262 243.300 293.300 212 332 212Z" fill="#FFFFFF"/>
-  <path d="M398 522L478 602L630 432" fill="none" stroke="#3B5BFF" stroke-width="68" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

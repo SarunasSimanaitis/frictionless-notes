@@ -1,10 +1,8 @@
-# Lapelis
+# Frictionless Notes
 
 **A personal productivity app for capturing notes, organising checklists and managing everyday tasks.**
 
-*Lapelis* is Lithuanian for a small sheet of paper: the slip you jot a shopping list on. The project started life as “Frictionless Notes”, which is still the repository name.
-
-Lapelis is a mobile productivity app built with React Native, Expo and TypeScript. It is designed around a simple idea: everyday note-taking and task management should feel effortless. Create a note, organise a shopping list, check something off, and get on with your day.
+Frictionless Notes is a mobile productivity app built with React Native, Expo and TypeScript. It is designed around a simple idea: everyday note-taking and task management should feel effortless. Create a note, organise a shopping list, check something off, and get on with your day.
 
 ---
 
@@ -26,7 +24,7 @@ The experience should feel natural. You should be able to open a note, interact 
 
 ## A different approach
 
-Lapelis is built around one simple idea:
+Frictionless Notes is built around one simple idea:
 
 > **The app should adapt to the way you use notes, not make you adapt to the app.**
 
@@ -43,7 +41,7 @@ The goal isn't to compete by having the most features. It's to make the basic ex
 
 ## The personal experience behind it
 
-Lapelis started from my own frustration with existing note-taking apps, particularly when managing shopping lists.
+Frictionless Notes started from my own frustration with existing note-taking apps, particularly when managing shopping lists.
 
 I was using Samsung Notes and found myself repeatedly running into small usability issues. Gboard appearing when I didn't need it, accidentally entering editing mode, and the simple act of checking off an item feeling less intuitive than it should.
 
@@ -51,7 +49,7 @@ These weren't major problems individually, but they kept interrupting something 
 
 I started thinking: what if I built a notes app that removed those little frustrations?
 
-That thought eventually became Frictionless Notes, now Lapelis.
+That thought eventually became Frictionless Notes.
 
 What started as a personal solution turned into a project where I could explore mobile development, user experience, interaction design, and the process of building a complete application from an idea.
 
@@ -206,7 +204,7 @@ To compare a branch with the version already on your phone without replacing it:
 npm run android:compare
 ```
 
-This installs a second app, labelled “Lapelis (new)”, with its own package name and its own empty set of notes. The app you already have, and its notes, are left untouched. For an installable APK instead, run `npx eas-cli build --platform android --profile compare`.
+This installs a second app, labelled “Frictionless Notes (new)”, with its own package name and its own empty set of notes. The app you already have, and its notes, are left untouched. For an installable APK instead, run `npx eas-cli build --platform android --profile compare`.
 
 Run `npm run android:fresh` afterwards to go back to the normal package name.
 
@@ -279,7 +277,7 @@ A production EAS profile is also configured for a production Android app bundle.
 
 ## Data and privacy
 
-Lapelis is designed to work without an account or remote backend.
+Frictionless Notes is designed to work without an account or remote backend.
 
 - Notes, checklist items, preferences, reminder metadata and document content are stored locally on the device.
 - Note images are copied into the app's local documents storage.
