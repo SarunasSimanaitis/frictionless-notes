@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1024 1024">
+  <!-- The mark on its own, for splash screens and places without the square background. -->
+  <g transform="translate(512 512) scale(1.3) translate(-512 -512)">
+    <path d="M332 212H542C663.500 212 762 310.500 762 432V742C762 780.700 730.700 812 692 812H482C360.500 812 262 713.500 262 592V282C262 243.300 293.300 212 332 212Z" fill="#3B5BFF"/>
+    <path d="M398 522L478 602L630 432" fill="none" stroke="#FFFFFF" stroke-width="68" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
