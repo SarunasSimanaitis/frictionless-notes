@@ -1,8 +1,10 @@
-# Frictionless Notes
+# Lapelis
 
 **A personal productivity app for capturing notes, organising checklists and managing everyday tasks.**
 
-Frictionless Notes is a mobile productivity app built with React Native, Expo and TypeScript. It is designed around a simple idea: everyday note-taking and task management should feel effortless. Create a note, organise a shopping list, check something off, and get on with your day.
+*Lapelis* is Lithuanian for a small sheet of paper: the slip you jot a shopping list on. The project started life as “Frictionless Notes”, which is still the repository name.
+
+Lapelis is a mobile productivity app built with React Native, Expo and TypeScript. It is designed around a simple idea: everyday note-taking and task management should feel effortless. Create a note, organise a shopping list, check something off, and get on with your day.
 
 ---
 
@@ -24,7 +26,7 @@ The experience should feel natural. You should be able to open a note, interact 
 
 ## A different approach
 
-Frictionless Notes is built around one simple idea:
+Lapelis is built around one simple idea:
 
 > **The app should adapt to the way you use notes, not make you adapt to the app.**
 
@@ -32,7 +34,8 @@ Instead of prioritizing endless features, I wanted to focus on the small interac
 
 - Tap anywhere on a checklist item to mark it as completed.
 - Keep viewing and interacting with your lists without accidentally entering edit mode.
-- Create and manage notes without unnecessary steps.
+- Create and manage notes without unnecessary steps: double-tap **+** for an instant note, and undo a delete instead of confirming it.
+- Keep navigation under your thumb, in one bottom bar.
 - Work offline, with your notes stored locally on your device.
 - Keep the interface clean, intuitive, and focused on the content.
 
@@ -40,7 +43,7 @@ The goal isn't to compete by having the most features. It's to make the basic ex
 
 ## The personal experience behind it
 
-Frictionless Notes started from my own frustration with existing note-taking apps, particularly when managing shopping lists.
+Lapelis started from my own frustration with existing note-taking apps, particularly when managing shopping lists.
 
 I was using Samsung Notes and found myself repeatedly running into small usability issues. Gboard appearing when I didn't need it, accidentally entering editing mode, and the simple act of checking off an item feeling less intuitive than it should.
 
@@ -48,7 +51,7 @@ These weren't major problems individually, but they kept interrupting something 
 
 I started thinking: what if I built a notes app that removed those little frustrations?
 
-That thought eventually became Frictionless Notes.
+That thought eventually became Frictionless Notes, now Lapelis.
 
 What started as a personal solution turned into a project where I could explore mobile development, user experience, interaction design, and the process of building a complete application from an idea.
 
@@ -59,46 +62,59 @@ It's not about reinventing note-taking. It's about paying attention to the detai
 ## Features
 
 - **Quick notes** — capture and edit everyday notes.
-- **Checklists and shopping lists** — add, check off, edit and reorder items.
-- **Custom Notes** — rich-text editing with font styles, sizes, emphasis, colors, headings, lists, alignment and paragraph spacing.
+- **Checklists and shopping lists** — add, check off, edit and reorder items; see progress at a glance, uncheck everything for the next shop, or clear what is done.
+- **Custom Notes** — rich-text editing with fonts, sizes, bold, italic, underline, strikethrough, text and highlight colours, headings, quotes, lists, dividers, alignment and paragraph spacing, plus one-tap *Clear formatting*.
 - **Embedded checklists** — combine checklist blocks with regular text in one note.
-- **Note appearance** — choose page backgrounds, paper styles, margins and templates.
+- **Page style** — ready-made page themes (Notebook, Journal, Blueprint, Night and more), ten page colours or your own, ruled, dotted and grid paper, page font, text size, line spacing and margins. Text always stays readable, on dark pages in the light theme and on pale pages in the dark theme.
+- **Templates** — Plan, Journal, Meeting notes, Weekly plan and Recipe.
 - **Inline images** — add local photos to Custom Notes, then move, resize, replace or remove them.
-- **Local reminders** — schedule reminders using the device's time zone.
-- **Trash and recovery** — restore deleted notes during the 30-day retention period or permanently delete them.
+- **Find things fast** — search, filter by Notes, Lists, Pinned, Reminders or Locked, and sort by last edited, date created or title.
+- **Pin, duplicate and share** — every note has one menu (tap ⋯ or hold the note) for pinning, locking, sharing as text, duplicating and moving to Trash.
+- **Local reminders** — schedule reminders using the device's time zone, with a configurable “After work” time.
+- **Trash and recovery** — deleting is instant with an Undo; notes stay recoverable for 30 days.
+- **Privacy** — optional App lock and per-note locks that use the phone's fingerprint, face or PIN, and an option to block screenshots and hide notes in the recent-apps view.
+- **Light, dark or system theme** — a flat, quiet interface with one accent colour.
 - **On-device storage** — notes are stored with SQLite; note images are kept in the app's documents directory.
 
 ## Screenshots
 
-The interface is available in both light and dark themes. Screenshots are displayed at a consistent width while keeping the gallery compact and easy to scan.
+These images come from a preview build with sample notes. Retake them on a device before using them in a store listing.
 
 ### Light theme
 
 <table>
   <tr>
-    <td align="center" width="50%">
+    <td align="center" width="33%">
       <strong>Home</strong><br>
-      <img src="./screenshots/01-home-light.png" width="280" alt="Home screen — light theme">
+      <img src="./screenshots/01-home-light.png" width="240" alt="Home screen — light theme">
     </td>
-    <td align="center" width="50%">
+    <td align="center" width="33%">
       <strong>Shopping list</strong><br>
-      <img src="./screenshots/02-shopping-list-light.png" width="280" alt="Shopping list — light theme">
+      <img src="./screenshots/02-shopping-list-light.png" width="240" alt="Shopping list — light theme">
+    </td>
+    <td align="center" width="33%">
+      <strong>Custom Note</strong><br>
+      <img src="./screenshots/03-rich-text-editor-light.png" width="240" alt="Custom Note on ruled paper — light theme">
     </td>
   </tr>
   <tr>
-    <td align="center" width="50%">
-      <strong>Rich-text editor</strong><br>
-      <img src="./screenshots/03-rich-text-editor-light.png" width="280" alt="Rich-text editor — light theme">
+    <td align="center">
+      <strong>Page style</strong><br>
+      <img src="./screenshots/09-page-style-light.png" width="240" alt="Page style sheet — light theme">
     </td>
-    <td align="center" width="50%">
+    <td align="center">
+      <strong>Night page</strong><br>
+      <img src="./screenshots/11-night-page-light.png" width="240" alt="A dark page inside the light theme">
+    </td>
+    <td align="center">
       <strong>Reminders</strong><br>
-      <img src="./screenshots/04-reminders-light.png" width="280" alt="Reminders — light theme">
+      <img src="./screenshots/04-reminders-light.png" width="240" alt="Reminders — light theme">
     </td>
   </tr>
   <tr>
-    <td align="center" colspan="2">
+    <td align="center" colspan="3">
       <strong>Settings</strong><br>
-      <img src="./screenshots/05-settings-light.png" width="280" alt="Settings — light theme">
+      <img src="./screenshots/05-settings-light.png" width="240" alt="Settings — light theme">
     </td>
   </tr>
 </table>
@@ -107,19 +123,23 @@ The interface is available in both light and dark themes. Screenshots are displa
 
 <table>
   <tr>
-    <td align="center" width="50%">
+    <td align="center" width="33%">
       <strong>Home</strong><br>
-      <img src="./screenshots/06-home-dark.png" width="280" alt="Home screen — dark theme">
+      <img src="./screenshots/06-home-dark.png" width="240" alt="Home screen — dark theme">
     </td>
-    <td align="center" width="50%">
+    <td align="center" width="33%">
+      <strong>New note menu</strong><br>
+      <img src="./screenshots/10-new-note-dark.png" width="240" alt="New note menu — dark theme">
+    </td>
+    <td align="center" width="33%">
       <strong>Shopping list</strong><br>
-      <img src="./screenshots/07-shopping-list-dark.png" width="280" alt="Shopping list — dark theme">
+      <img src="./screenshots/07-shopping-list-dark.png" width="240" alt="Shopping list — dark theme">
     </td>
   </tr>
   <tr>
-    <td align="center" colspan="2">
+    <td align="center" colspan="3">
       <strong>Settings</strong><br>
-      <img src="./screenshots/08-settings-dark.png" width="280" alt="Settings — dark theme">
+      <img src="./screenshots/08-settings-dark.png" width="240" alt="Settings — dark theme">
     </td>
   </tr>
 </table>
@@ -132,14 +152,18 @@ The interface is available in both light and dark themes. Screenshots are displa
 | --- | --- |
 | Mobile framework | React Native 0.88.1 |
 | App platform/tooling | Expo SDK 58 |
-| Language | TypeScript 6 |
+| Language | TypeScript 7 |
 | UI | React 19 |
+| Icons | Hand-drawn outline set on `react-native-svg` |
 | Local database | `expo-sqlite` |
 | Reminders | `expo-notifications` |
 | Image selection | `expo-image-picker` |
+| App lock and locked notes | `expo-local-authentication` |
+| Screenshot blocking | `expo-screen-capture` |
+| System theme | `expo-system-ui` |
 | Rich-text editor | TenTap / Tiptap |
 | Gestures and animation | React Native Gesture Handler, Reanimated, Draggable FlatList |
-| Editor bundle | Vite |
+| Editor bundle | Vite 8 |
 
 ## Getting started
 
@@ -169,8 +193,22 @@ The `postinstall` script applies a version-checked compatibility patch for `reac
 Build and install the development client:
 
 ```bash
-npx expo run:android
+npm run android:fresh
 ```
+
+This regenerates the native Android project from `app.json` (app name, icon, permissions and native modules) and installs the app. Use it the first time and whenever a dependency or `app.json` changes; plain `npx expo run:android` is enough in between.
+
+### Try a branch next to the installed app
+
+To compare a branch with the version already on your phone without replacing it:
+
+```bash
+npm run android:compare
+```
+
+This installs a second app, labelled “Lapelis (new)”, with its own package name and its own empty set of notes. The app you already have, and its notes, are left untouched. For an installable APK instead, run `npx eas-cli build --platform android --profile compare`.
+
+Run `npm run android:fresh` afterwards to go back to the normal package name.
 
 Then start the development server:
 
@@ -203,6 +241,8 @@ A production EAS profile is also configured for a production Android app bundle.
 | --- | --- |
 | `npm start` | Start Expo |
 | `npm run android` | Build and run the Android app locally |
+| `npm run android:fresh` | Regenerate the native project, then build and run |
+| `npm run android:compare` | Install a separate “(new)” copy next to the existing app |
 | `npm run ios` | Build and run the iOS app locally |
 | `npm run typecheck` | Run the TypeScript type check |
 | `npm test` | Run the Node.js test suite |
@@ -217,28 +257,39 @@ A production EAS profile is also configured for a production Android app bundle.
 ├── App.tsx                    # App startup, state and navigation
 ├── assets/                    # App icon, logo and splash artwork
 ├── editor-web/                # Custom TenTap editor and Vite build
-├── scripts/                   # Dependency compatibility patch
+├── scripts/                   # Dependency compatibility patch and Android run helper
 ├── src/
-│   ├── editor/                # Custom Note editor and formatting UI
+│   ├── editor/                # Custom Note editor, formatting toolbar and page style
 │   ├── lists/                 # Checklist components
 │   ├── screens/               # Home and note editor screens
+│   ├── security/              # Device-lock checks and the lock screen
+│   ├── ui/                    # Icons, bottom sheet, toast and other shared pieces
+│   ├── brand.ts               # The app's display name
+│   ├── theme.ts               # Colours for the app and for note pages
 │   ├── database.ts            # SQLite database and migrations
 │   ├── model.ts               # Note models and domain operations
 │   ├── notifications.ts       # Local reminder scheduling
 │   └── noteImages.ts          # Local image storage
 ├── tests/                     # Model, theme and UI contract tests
 ├── app.json                   # Expo app configuration
+├── app.config.cjs             # Optional "compare" build variant
 ├── eas.json                   # EAS build profiles
 └── package.json
 ```
 
 ## Data and privacy
 
-Frictionless Notes is currently designed to work without an account or remote backend.
+Lapelis is designed to work without an account or remote backend.
 
 - Notes, checklist items, preferences, reminder metadata and document content are stored locally on the device.
 - Note images are copied into the app's local documents storage.
-- The project does not currently implement accounts, cloud synchronization, collaboration or a remote backend.
+- The project does not implement accounts, cloud synchronization, collaboration or a remote backend, and the app makes no network requests of its own.
+- **App lock** asks for the phone's fingerprint, face or PIN when the app opens and after it has been in the background for more than 20 seconds.
+- **Locked notes** hide their preview, are left out of content search, and ask for the same device lock before opening.
+- **Hide notes outside the app** blocks screenshots and blanks the app's preview in the recent-apps view.
+- The app never sees or stores your fingerprint or PIN; Android or iOS does the check and reports only success or failure.
+
+What the locks do not do: they do not add a second layer of encryption. Notes rely on the storage encryption the phone already provides, so the locks protect against someone holding your unlocked phone, not against someone with full access to the device's storage. Android's own device backup may also include app data, depending on the phone's backup settings.
 
 Because data is stored locally, uninstalling the app or clearing its data can remove notes and images. Back up important information before removing the app or resetting device data.
 
@@ -256,6 +307,7 @@ npx expo export --platform android --output-dir dist
 
 Automated checks do not replace testing on a physical device. In particular, verify:
 
+- App lock, locked notes and screenshot blocking
 - Keyboard behavior and checklist interaction
 - Checklist editing and reordering
 - Reminder permissions and notification delivery
@@ -267,6 +319,8 @@ Automated checks do not replace testing on a physical device. In particular, ver
 ## Current limitations
 
 - No account system, cloud backup or synchronization.
+- Locks rely on the device's screen lock and do not encrypt notes separately.
+- Duplicating a note does not copy its images.
 - No shared notes or real-time collaboration.
 - Reminder delivery depends on operating-system notification permissions and battery-management policies.
 - Custom Notes use continuous scrolling; fixed-page pagination is not implemented.
