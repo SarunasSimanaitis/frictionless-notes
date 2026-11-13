@@ -51,6 +51,8 @@ function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       await runDatabaseMigrations(database);
       return database;
     })();
+    // A failed open must not be remembered, or "Try again" could never succeed.
+    databasePromise.catch(() => { databasePromise = null; });
   }
 
   return databasePromise;

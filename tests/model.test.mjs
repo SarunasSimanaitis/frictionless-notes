@@ -31,6 +31,8 @@ import {
   findDuplicateReminderNotificationIds,
   findMappedReminderNotification,
   insertChecklistBlockAtSelection,
+  isUnchangedPlainParagraph,
+  plainTextToHtml,
   normalizeNoteReminderGroups,
   nextChecklistItemPosition,
   nextAfterWorkDate,
@@ -780,4 +782,17 @@ test('the lock flag is added to existing databases without disturbing saved note
   const row = database.prepare('SELECT title, body, is_locked, is_pinned FROM notes WHERE id = ?').get('old');
   assert.deepEqual({ ...row }, { title: 'Old note', body: 'Still here', is_locked: 0, is_pinned: 0 });
   database.close();
+});
+
+test('opening an unformatted paragraph in the rich editor is not treated as an edit', () => {
+  // These are the exact strings the editor bundle reports back for plain content.
+  assert.equal(plainTextToHtml('Today'), '<p>Today</p>');
+  assert.equal(plainTextToHtml(''), '<p><br></p>');
+  assert.equal(plainTextToHtml('a\nb & c <d> "q"'), '<p>a<br>b &amp; c &lt;d&gt; "q"</p>');
+  assert.equal(isUnchangedPlainParagraph({ text: 'Today' }, '<p>Today</p>'), true);
+  assert.equal(isUnchangedPlainParagraph({ text: '' }, '<p><br></p>'), true);
+  // Typing, formatting, or a paragraph that already holds rich text all count as changes.
+  assert.equal(isUnchangedPlainParagraph({ text: 'Today' }, '<p>Today!</p>'), false);
+  assert.equal(isUnchangedPlainParagraph({ text: 'Today' }, '<p><strong>Today</strong></p>'), false);
+  assert.equal(isUnchangedPlainParagraph({ text: 'Today', richHtml: '<p>Today</p>' }, '<p>Today</p>'), false);
 });

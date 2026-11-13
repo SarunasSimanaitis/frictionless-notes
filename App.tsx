@@ -31,6 +31,7 @@ import {
 import { LockScreen } from './src/security/LockScreen';
 import { palette, resolveThemeMode, setThemeMode } from './src/theme';
 import { styles } from './src/styles';
+import { ErrorBoundary } from './src/ui/ErrorBoundary';
 import { Toast, type ToastMessage } from './src/ui/Toast';
 import type {
   AppPreferences, CustomNoteTemplateId, Note, NoteType, Reminder,
@@ -41,7 +42,9 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
-        <AppContent />
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
@@ -92,7 +95,10 @@ function AppContent() {
   }, []);
   const dismissToast = useCallback(() => setToast(null), []);
 
-  const refreshNotes = useCallback(async () => {
+  const refreshInFlight = useRef(false);
+  const refreshQueued = useRef(false);
+
+  const loadEverything = useCallback(async () => {
     try {
       setLoadError(false);
       await purgeExpiredTrash();
@@ -149,6 +155,27 @@ function AppContent() {
       setLoading(false);
     }
   }, []);
+
+  /**
+   * Reloads notes, reminders and settings. Launching and returning to the app can both ask
+   * for a refresh at the same moment; two at once would purge Trash and reschedule every
+   * reminder twice, so a second request waits and then runs once.
+   */
+  const refreshNotes = useCallback(async () => {
+    if (refreshInFlight.current) {
+      refreshQueued.current = true;
+      return;
+    }
+    refreshInFlight.current = true;
+    try {
+      do {
+        refreshQueued.current = false;
+        await loadEverything();
+      } while (refreshQueued.current);
+    } finally {
+      refreshInFlight.current = false;
+    }
+  }, [loadEverything]);
 
   useEffect(() => {
     if (!lastNotificationResponse || lastNotificationResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
@@ -238,13 +265,11 @@ function AppContent() {
   const handleOpen = (note: Note) => void openNote(note);
 
   const handleSaved = (savedNote: Note) => {
-    setNotes((current) => {
-      const exists = current.some((item) => item.id === savedNote.id);
-      const next = exists
-        ? current.map((item) => (item.id === savedNote.id ? savedNote : item))
-        : [savedNote, ...current];
-      return sortNotes(next, preferencesRef.current.sortMode);
-    });
+    // Only refresh a note that is still in the list. A save that finishes just after the note
+    // was moved to Trash must not put it back on the home screen.
+    setNotes((current) => current.some((item) => item.id === savedNote.id)
+      ? sortNotes(current.map((item) => (item.id === savedNote.id ? savedNote : item)), preferencesRef.current.sortMode)
+      : current);
   };
 
   const handleTogglePin = async (note: Note) => {

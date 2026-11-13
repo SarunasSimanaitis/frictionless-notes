@@ -10,7 +10,8 @@ import { NoteFontFormattingBridge } from './fontFormattingBridge';
 import { editorHtml } from '../../editor-web/build/editorHtml';
 import {
   NOTE_BASE_FONT_SIZES, canAddChecklistItem, createEmbeddedChecklistBlock, createEmbeddedChecklistItem, createId, editChecklistItemText,
-  insertChecklistBlockAtSelection, noteBackgrounds, normalizeItemPositions, removeChecklistItem, reorderItem, richHtmlToPlainText, toggleItem,
+  insertChecklistBlockAtSelection, isUnchangedPlainParagraph, noteBackgrounds, normalizeItemPositions, plainTextToHtml, removeChecklistItem,
+  reorderItem, richHtmlToPlainText, toggleItem,
 } from '../model';
 import { pickNoteImage, removeNoteImage } from '../noteImages';
 import { noteBackgroundColors, noteBackgroundLabels, noteMarginValues, pageInkColors, palette, resolvePageColor } from '../theme';
@@ -106,6 +107,9 @@ export function TextDocumentEditor({ note, firstParagraphInputRef, firstRichEdit
   const updateRichParagraph = (paragraphId: string, richHtml: string, text: string) => {
     const current = note.blocks.find((block) => block.id === paragraphId && block.type === 'paragraph');
     if (current?.type === 'paragraph' && current.richHtml === richHtml && current.text === text) return;
+    // Opening a note is not editing it: skip the editor's first report of unformatted text,
+    // which would otherwise save the note again and move it to the top of the list.
+    if (current?.type === 'paragraph' && isUnchangedPlainParagraph(current, richHtml)) return;
     onBlocksChange(note.blocks.map((block) => block.id === paragraphId && block.type === 'paragraph'
       ? { ...block, richHtml, text }
       : block));
@@ -322,11 +326,6 @@ function areEditorStatesEquivalent(previous: ActiveRichEditor['state'], next: Ac
   );
 }
 
-function textAsHtml(text: string): string {
-  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<p>${escaped.replace(/\n/g, '<br>') || '<br>'}</p>`;
-}
-
 function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing, placeholder, focusedBlockId, firstEditorRef, isFirst, onEditorStateChange, onChange }: {
   block: ParagraphBlock;
   appearance: NoteAppearance;
@@ -353,7 +352,7 @@ function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing,
     webviewContainer: { backgroundColor },
   };
   const editor = useEditorBridgeWithTheme({
-    initialContent: block.richHtml ?? textAsHtml(block.text),
+    initialContent: block.richHtml ?? plainTextToHtml(block.text),
     customSource: editorHtml,
     bridgeExtensions: [...TenTapStartKit, NoteFontFormattingBridge],
     autofocus: false,
@@ -394,6 +393,7 @@ function RichParagraphEditor({ block, appearance, themeMode, alignment, spacing,
     if (typeof html !== 'string') return;
     const text = richHtmlToPlainText(html);
     if (block.richHtml === html && block.text === text) return;
+    if (isUnchangedPlainParagraph(block, html)) return;
     onChange(html, text);
   }, [block.richHtml, block.text, html, onChange]);
 

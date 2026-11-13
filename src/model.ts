@@ -157,6 +157,20 @@ export function richHtmlToPlainText(html: string): string {
     .trim();
 }
 
+/** The HTML the rich editor shows, and reports back, for text that has no formatting. */
+export function plainTextToHtml(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<p>${escaped.replace(/\n/g, '<br>') || '<br>'}</p>`;
+}
+
+/**
+ * True when the editor's report for a never-formatted paragraph is just its text again.
+ * The editor reports its content as soon as it loads, and that first report is not an edit.
+ */
+export function isUnchangedPlainParagraph(block: Pick<ParagraphBlock, 'text' | 'richHtml'>, html: string): boolean {
+  return block.richHtml === undefined && html === plainTextToHtml(block.text);
+}
+
 export function flattenNoteBlocks(blocks: NoteBlock[]): string {
   return blocks.map((block) => block.type === 'paragraph'
     ? (block.richHtml === undefined ? block.text : richHtmlToPlainText(block.richHtml))

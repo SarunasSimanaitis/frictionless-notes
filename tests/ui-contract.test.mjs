@@ -446,6 +446,20 @@ test('the home list stays quick: stable row callbacks and a deferred search', ()
   assert.match(homeScreenSource, /onRestore=\{restoreNote\} onDeletePermanently=\{deleteNotePermanently\}/);
 });
 
+test('edits and the database survive awkward moments', () => {
+  // A failed open is retried instead of being remembered forever.
+  assert.match(databaseSource, /databasePromise\.catch\(\(\) => \{ databasePromise = null; \}\)/);
+  // Closing the editor by any route saves the edit that was still waiting.
+  assert.match(noteEditorSource, /void repository\.updateNote\(latest\)\.then\(\(\) => onSavedRef\.current\(latest\)\)\.catch\(\(\) => undefined\)/);
+  // A late save cannot bring a trashed note back onto the home screen.
+  assert.doesNotMatch(appSource, /\[savedNote, \.\.\.current\]/);
+  // Refreshes never overlap.
+  assert.match(appSource, /if \(refreshInFlight\.current\) \{\s*refreshQueued\.current = true;\s*return;/);
+  assert.match(appSource, /<ErrorBoundary>\s*<AppContent \/>\s*<\/ErrorBoundary>/);
+  // Opening a note is not an edit.
+  assert.match(documentEditorSource, /if \(current\?\.type === 'paragraph' && isUnchangedPlainParagraph\(current, richHtml\)\) return;/);
+});
+
 test('menus and toasts animate on the native driver, away from the rich-text views', () => {
   assert.match(fadeSlideInSource, /useNativeDriver: true/);
   assert.match(fadeSlideInSource, /return \(\) => animation\.stop\(\)/);

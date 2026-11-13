@@ -67,6 +67,8 @@ export function NoteEditorScreen({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingSave = () => pendingListSaves.current > 0 || pendingTextSaves.current > 0 || saveTimer.current !== null;
   const noteRef = useRef(initialNote);
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
   const appState = useRef(AppState.currentState);
   const bodyRef = useRef<TextInputInstance>(null);
   const firstRichEditorRef = useRef<EditorBridge | null>(null);
@@ -200,9 +202,15 @@ export function NoteEditorScreen({
 
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (!saveTimer.current) return;
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      // The editor can close without the back button (a reminder opens another note, a toast
+      // opens a copy). Save the edit that was still waiting instead of dropping it.
+      const latest = noteRef.current;
+      void repository.updateNote(latest).then(() => onSavedRef.current(latest)).catch(() => undefined);
     };
-  }, []);
+  }, [repository]);
 
   const leaveEditor = () => {
     // Navigation must stay responsive even if a native SQLite operation stalls.
