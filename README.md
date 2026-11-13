@@ -150,7 +150,7 @@ These images come from a preview build with sample notes. Retake them on a devic
 | --- | --- |
 | Mobile framework | React Native 0.88.1 |
 | App platform/tooling | Expo SDK 58 |
-| Language | TypeScript 7 |
+| Language | TypeScript 6 |
 | UI | React 19 |
 | Icons | Hand-drawn outline set on `react-native-svg` |
 | Local database | `expo-sqlite` |
