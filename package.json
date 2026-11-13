@@ -50,5 +50,10 @@
     "test": "node --experimental-strip-types --experimental-sqlite --test",
     "editor:build": "vite --config editor-web/vite.config.ts build && node ./node_modules/@10play/tentap-editor/scripts/buildEditor.js ./editor-web/build/index.html",
     "postinstall": "node scripts/patch-draggable-flatlist.cjs && npm run editor:build"
+  },
+  "overrides": {
+    "@expo/fingerprint": {
+      "minimatch": "11.0.8"
+    }
   }
 }
