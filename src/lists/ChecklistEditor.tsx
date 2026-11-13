@@ -22,6 +22,7 @@ import { palette } from '../theme';
 import { styles } from '../styles';
 import type { ChecklistItem, Note } from '../types';
 import { Icon } from '../ui/Icon';
+import { ProgressBar } from '../ui/ProgressBar';
 import { ChecklistItemLabel } from './ChecklistItemLabel';
 
 export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComplete, onRemindersChanged }: {
@@ -373,9 +374,7 @@ export function ChecklistEditor({ note, repository, onNoteChange, onListSaveComp
                 </>
               ) : null}
             </View>
-            <View style={styles.listProgressTrack}>
-              <View style={[styles.listProgressFill, { width: `${Math.round((done / total) * 100)}%` }]} />
-            </View>
+            <ProgressBar value={done / total} />
             {total < 4 ? (
               <Text style={styles.listHint}>Tap an item to tick it off. Hold to reorder. Use the pencil to edit.</Text>
             ) : null}

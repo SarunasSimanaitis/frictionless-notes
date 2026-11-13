@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, BackHandler, FlatList, Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View, type ListRenderItemInfo,
 } from 'react-native';
@@ -16,6 +16,7 @@ import type { NotificationPermission } from '../notifications';
 import type { NotesRepository } from '../repository';
 import type { AppPreferences, CustomNoteTemplateId, Note, NoteFilter, NoteSortMode, NoteType, Reminder } from '../types';
 import { Icon, type IconName } from '../ui/Icon';
+import { FadeSlideIn } from '../ui/FadeSlideIn';
 import { IconButton } from '../ui/IconButton';
 import { Sheet, SheetAction } from '../ui/Sheet';
 
@@ -71,6 +72,15 @@ export function HomeScreen({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const lastNewTapAt = useRef(0);
   const insets = useSafeAreaInsets();
+  // Typing stays instant; the list catches up with the search a moment later.
+  const deferredQuery = useDeferredValue(query);
+  // The parent hands down new callbacks on every render. Rows get stable ones, so a toast
+  // or a permission change no longer redraws the whole list.
+  const rowHandlers = useRef({ onOpen, onRestore, onDeletePermanently });
+  rowHandlers.current = { onOpen, onRestore, onDeletePermanently };
+  const openNote = useCallback((note: Note) => rowHandlers.current.onOpen(note), []);
+  const restoreNote = useCallback((note: Note) => rowHandlers.current.onRestore(note), []);
+  const deleteNotePermanently = useCallback((note: Note) => rowHandlers.current.onDeletePermanently(note), []);
 
   // Trash and the create menu are in-screen states, not navigation routes. Consume Android's
   // back gesture while either is open so the OS does not exit the app.
@@ -108,24 +118,24 @@ export function HomeScreen({
   const hasLockedNotes = useMemo(() => notes.some((note) => note.isLocked), [notes]);
   const activeFilter: NoteFilter = filter === 'locked' && !hasLockedNotes ? 'all' : filter;
   const filteredNotes = useMemo(
-    () => searchNotes(filterNotes(notes, activeFilter, new Set(remindersByNote.keys())), query, preferences.sortMode),
-    [activeFilter, notes, preferences.sortMode, query, remindersByNote],
+    () => searchNotes(filterNotes(notes, activeFilter, new Set(remindersByNote.keys())), deferredQuery, preferences.sortMode),
+    [activeFilter, deferredQuery, notes, preferences.sortMode, remindersByNote],
   );
   const filteredTrash = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
+    const normalized = deferredQuery.trim().toLocaleLowerCase();
     if (!normalized) return trashedNotes;
     return trashedNotes.filter((note) => (note.isLocked
       ? [note.title]
       : [note.title, note.body, ...note.items.map((item) => item.text)])
       .join('\n').toLocaleLowerCase().includes(normalized));
-  }, [query, trashedNotes]);
+  }, [deferredQuery, trashedNotes]);
 
   const renderNote = useCallback(({ item }: ListRenderItemInfo<Note>) => (
-    <NoteListRow note={item} reminders={remindersByNote.get(item.id) ?? EMPTY_REMINDERS} onOpen={onOpen} onMore={setMenuNote} highlightPinned={preferences.highlightPinnedNotes} themeMode={themeMode} />
-  ), [remindersByNote, onOpen, preferences.highlightPinnedNotes, themeMode]);
+    <NoteListRow note={item} reminders={remindersByNote.get(item.id) ?? EMPTY_REMINDERS} onOpen={openNote} onMore={setMenuNote} highlightPinned={preferences.highlightPinnedNotes} themeMode={themeMode} />
+  ), [remindersByNote, openNote, preferences.highlightPinnedNotes, themeMode]);
   const renderTrashedNote = useCallback(({ item }: ListRenderItemInfo<Note>) => (
-    <TrashNoteRow note={item} onRestore={onRestore} onDeletePermanently={onDeletePermanently} themeMode={themeMode} />
-  ), [onRestore, onDeletePermanently, themeMode]);
+    <TrashNoteRow note={item} onRestore={restoreNote} onDeletePermanently={deleteNotePermanently} themeMode={themeMode} />
+  ), [restoreNote, deleteNotePermanently, themeMode]);
 
   const openTrash = () => {
     setQuery('');
@@ -315,7 +325,7 @@ export function HomeScreen({
         {showCreateOptions ? (
           <View style={styles.createLayer}>
             <Pressable style={{ flex: 1 }} accessibilityLabel="Close the new note menu" onPress={() => setShowCreateOptions(false)} />
-            <View style={styles.createPanel}>
+            <FadeSlideIn offset={36} duration={200} style={styles.createPanel}>
               <View style={styles.sheetGrabber} />
               <Text style={styles.createTitle}>New</Text>
               <View style={styles.createOptions}>
@@ -339,7 +349,7 @@ export function HomeScreen({
                 ))}
               </View>
               <Text style={styles.createTip}>Tip: double-tap + to start a quick note straight away.</Text>
-            </View>
+            </FadeSlideIn>
           </View>
         ) : null}
       </View>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { styles } from '../styles';
+import { FadeSlideIn } from './FadeSlideIn';
 
 export interface ToastMessage {
   /** Changes with every new toast so the timer restarts. */
@@ -25,8 +26,8 @@ export function Toast({ toast, bottom, onDismiss }: {
   if (!toast) return null;
   return (
     <View pointerEvents="box-none" style={[styles.toastLayer, { bottom }]}>
-      <View style={styles.toast} accessibilityLiveRegion="polite">
-        <Text style={styles.toastText} numberOfLines={2}>{toast.message}</Text>
+      <FadeSlideIn key={toast.id} style={styles.toast}>
+        <Text style={styles.toastText} numberOfLines={2} accessibilityLiveRegion="polite">{toast.message}</Text>
         {toast.actionLabel && toast.onAction ? (
           <Pressable
             accessibilityRole="button"
@@ -38,7 +39,7 @@ export function Toast({ toast, bottom, onDismiss }: {
             <Text style={styles.toastActionText}>{toast.actionLabel}</Text>
           </Pressable>
         ) : null}
-      </View>
+      </FadeSlideIn>
     </View>
   );
 }

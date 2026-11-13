@@ -33,6 +33,9 @@ const themedSwitchSource = readFileSync(new URL('../src/ui/ThemedSwitch.tsx', im
 const deviceAuthSource = readFileSync(new URL('../src/security/deviceAuth.ts', import.meta.url), 'utf8');
 const lockScreenSource = readFileSync(new URL('../src/security/LockScreen.tsx', import.meta.url), 'utf8');
 const modelSource = readFileSync(new URL('../src/model.ts', import.meta.url), 'utf8');
+const toastSource = readFileSync(new URL('../src/ui/Toast.tsx', import.meta.url), 'utf8');
+const sheetSource = readFileSync(new URL('../src/ui/Sheet.tsx', import.meta.url), 'utf8');
+const fadeSlideInSource = readFileSync(new URL('../src/ui/FadeSlideIn.tsx', import.meta.url), 'utf8');
 const formattingToolbarSource = readFileSync(new URL('../src/editor/FormattingToolbar.tsx', import.meta.url), 'utf8');
 const fontFormattingBridgeSource = readFileSync(new URL('../src/editor/fontFormattingBridge.ts', import.meta.url), 'utf8');
 const editorViteConfigSource = readFileSync(new URL('../editor-web/vite.config.ts', import.meta.url), 'utf8');
@@ -389,7 +392,7 @@ test('navigation lives in a bottom bar and note actions in one menu', () => {
   for (const action of ['onTogglePin', 'onToggleLock', 'onShare', 'onDuplicate', 'onDelete']) {
     assert.ok(homeScreenSource.includes(`runNoteAction(${action})`), `note menu offers ${action}`);
   }
-  assert.match(homeScreenSource, /filterNotes\(notes, activeFilter, new Set\(remindersByNote\.keys\(\)\)\), query, preferences\.sortMode/);
+  assert.match(homeScreenSource, /filterNotes\(notes, activeFilter, new Set\(remindersByNote\.keys\(\)\)\), deferredQuery, preferences\.sortMode/);
 });
 
 test('moving a note to Trash is immediate and can be undone', () => {
@@ -433,4 +436,22 @@ test('lists show progress and can be reset or cleared in one tap', () => {
   assert.match(checklistEditorSource, /accessibilityLabel="Uncheck all items" onPress=\{\(\) => void uncheckAll\(\)\}/);
   assert.match(checklistEditorSource, /accessibilityLabel="Remove completed items" onPress=\{confirmClearChecked\}/);
   assert.match(checklistEditorSource, /for \(const item of removed\) await repository\.deleteChecklistItem\(item\.id, note\.id, next\.updatedAt\)/);
+});
+
+test('the home list stays quick: stable row callbacks and a deferred search', () => {
+  assert.match(homeScreenSource, /const deferredQuery = useDeferredValue\(query\)/);
+  assert.match(homeScreenSource, /const openNote = useCallback\(\(note: Note\) => rowHandlers\.current\.onOpen\(note\), \[\]\)/);
+  assert.match(homeScreenSource, /onOpen=\{openNote\} onMore=\{setMenuNote\}/);
+  assert.match(homeScreenSource, /\[remindersByNote, openNote, preferences\.highlightPinnedNotes, themeMode\]/);
+  assert.match(homeScreenSource, /onRestore=\{restoreNote\} onDeletePermanently=\{deleteNotePermanently\}/);
+});
+
+test('menus and toasts animate on the native driver, away from the rich-text views', () => {
+  assert.match(fadeSlideInSource, /useNativeDriver: true/);
+  assert.match(fadeSlideInSource, /return \(\) => animation\.stop\(\)/);
+  assert.match(toastSource, /<FadeSlideIn key=\{toast\.id\}/);
+  assert.match(sheetSource, /<FadeSlideIn /);
+  assert.match(homeScreenSource, /<FadeSlideIn offset=\{36\} duration=\{200\} style=\{styles\.createPanel\}>/);
+  assert.doesNotMatch(noteEditorSource, /FadeSlideIn|Animated\./);
+  assert.doesNotMatch(documentEditorSource, /FadeSlideIn|Animated\./);
 });

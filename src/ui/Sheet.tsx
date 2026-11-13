@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../styles';
 import { palette } from '../theme';
+import { FadeSlideIn } from './FadeSlideIn';
 import { Icon, type IconName } from './Icon';
 
 /** A bottom sheet for short menus and settings. Tapping outside or pressing back closes it. */
@@ -19,7 +20,7 @@ export function Sheet({ visible, title, subtitle, onClose, children, scrollable 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.sheetBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
-        <View style={[styles.sheetPanel, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+        <FadeSlideIn offset={36} duration={200} style={[styles.sheetPanel, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <View style={styles.sheetGrabber} />
           {title ? (
             <View style={styles.sheetHeader}>
@@ -30,7 +31,7 @@ export function Sheet({ visible, title, subtitle, onClose, children, scrollable 
           {scrollable ? (
             <ScrollView keyboardShouldPersistTaps="always" showsVerticalScrollIndicator={false}>{children}</ScrollView>
           ) : children}
-        </View>
+        </FadeSlideIn>
       </View>
     </Modal>
   );
