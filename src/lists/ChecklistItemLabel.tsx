@@ -6,9 +6,11 @@ import { styles } from '../styles';
 type TextLine = { x: number; y: number; width: number; height: number };
 
 /** Checklist label with native strikethrough plus a measured visual fallback for Android. */
-export const ChecklistItemLabel = memo(function ChecklistItemLabel({ text, checked }: {
+export const ChecklistItemLabel = memo(function ChecklistItemLabel({ text, checked, color }: {
   text: string;
   checked: boolean;
+  /** Overrides the text colour on a note page whose background differs from the app's. */
+  color?: string;
 }) {
   const [lines, setLines] = useState<TextLine[]>([]);
   const onTextLayout = useCallback((event: NativeSyntheticEvent<{ lines: TextLine[] }>) => {
@@ -34,6 +36,7 @@ export const ChecklistItemLabel = memo(function ChecklistItemLabel({ text, check
         onTextLayout={onTextLayout}
         style={[
           styles.checklistText,
+          color && !checked ? { color } : null,
           checked && styles.checklistTextChecked,
           { textDecorationLine: checked ? 'line-through' : 'none' },
         ]}
@@ -50,7 +53,7 @@ export const ChecklistItemLabel = memo(function ChecklistItemLabel({ text, check
             top: line.y + line.height * 0.53,
             width: line.width,
             height: 1.5,
-            backgroundColor: palette.ink,
+            backgroundColor: palette.checked,
             zIndex: 10,
             elevation: 2,
           }}

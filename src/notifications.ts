@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { findDuplicateReminderNotificationIds, findMappedReminderNotification, shouldScheduleReminder } from './model';
+import { APP_NAME } from './brand';
 import type { Reminder } from './types';
 
 export interface NotificationPermission {
@@ -38,7 +39,7 @@ async function ensureAndroidChannel(): Promise<void> {
     name: 'Reminders',
     importance: Notifications.AndroidImportance.DEFAULT,
     vibrationPattern: [0, 180],
-    lightColor: '#536F9F',
+    lightColor: '#3B5BFF',
   });
 }
 
@@ -106,7 +107,7 @@ async function syncReminderNotificationNow(
   }
 
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  const notificationTitle = reminder.noteId && noteTitle ? noteTitle : 'Frictionless Notes';
+  const notificationTitle = reminder.noteId && noteTitle ? noteTitle : APP_NAME;
   const mappedNotificationId = findMappedReminderNotification(reminder, scheduled.map((notification) => ({
     identifier: notification.identifier,
     reminderId: typeof notification.content.data?.reminderId === 'string'

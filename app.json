@@ -1,26 +1,28 @@
 {
   "expo": {
-    "name": "Frictionless Notes",
+    "name": "Lapelis",
     "slug": "frictionless-notes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "plugins": [
       "expo-notifications",
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Frictionless Notes to add photos to your custom notes.",
+          "photosPermission": "Allow Lapelis to add photos to your custom notes.",
           "microphonePermission": false
         }
-      ]
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Lapelis to use Face ID to unlock your notes."
+        }
+      ],
+      "expo-system-ui"
     ],
-    "androidStatusBar": {
-      "barStyle": "dark-content",
-      "backgroundColor": "#F7F6F1",
-      "translucent": false
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.frictionlessnotes.app",
@@ -32,7 +34,7 @@
       "package": "com.frictionlessnotes.app",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#0B1B35",
+        "backgroundColor": "#3B5BFF",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true

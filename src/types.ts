@@ -1,11 +1,17 @@
 export type NoteType = 'text' | 'custom' | 'checklist' | 'shopping';
 export type StoredNoteType = 'text' | 'checklist' | 'shopping';
 export type NoteEditorMode = 'quick' | 'custom';
-export type CustomNoteTemplateId = 'blank' | 'plan' | 'journal';
-export type NoteBackground = 'warmWhite' | 'white' | 'cream' | 'pink' | 'green' | 'blue';
+export type CustomNoteTemplateId = 'blank' | 'plan' | 'journal' | 'meeting' | 'weekly' | 'recipe';
+export type NoteBackground =
+  | 'warmWhite' | 'white' | 'cream' | 'pink' | 'green' | 'blue'
+  | 'lavender' | 'sand' | 'graphite' | 'midnight';
 export type PaperStyle = 'plain' | 'lined' | 'dotted' | 'grid';
 export type NoteMargin = 'narrow' | 'comfortable' | 'wide';
-export type NoteFont = 'sans' | 'serif';
+export type NoteFont = 'sans' | 'serif' | 'mono';
+export type NoteLineHeight = 'tight' | 'normal' | 'loose';
+export type ThemePreference = 'system' | 'light' | 'dark';
+export type NoteSortMode = 'updated' | 'created' | 'title';
+export type NoteFilter = 'all' | 'notes' | 'lists' | 'pinned' | 'reminders' | 'locked';
 export type NoteFontFamily = 'system' | 'arial' | 'serif' | 'monospace';
 export type ParagraphSpacing = 'compact' | 'normal' | 'relaxed';
 
@@ -17,6 +23,9 @@ export interface NoteAppearance {
   customBackgroundColor?: string;
   quickFontSize?: number;
   quickTextColor?: string;
+  /** Base text size of a Custom Note page in CSS pixels. */
+  baseFontSize?: number;
+  lineHeight?: NoteLineHeight;
 }
 
 export interface ChecklistItem {
@@ -72,6 +81,8 @@ export interface Note {
   updatedAt: number;
   deletedAt: number | null;
   isPinned: boolean;
+  /** Locked notes hide their preview and ask for the device lock before opening. */
+  isLocked: boolean;
   items: ChecklistItem[];
 }
 
@@ -91,6 +102,11 @@ export interface AppPreferences {
   remindersEnabled: boolean;
   afterWorkTime: string;
   highlightPinnedNotes: boolean;
-  themeMode: 'light' | 'dark';
+  themeMode: ThemePreference;
   quickNoteToolbarMode: 'simple' | 'advanced';
+  /** Ask for the device lock (fingerprint, face or PIN) when the app opens. */
+  appLockEnabled: boolean;
+  /** Block screenshots and hide the app's content in the recent-apps view. */
+  screenPrivacy: boolean;
+  sortMode: NoteSortMode;
 }

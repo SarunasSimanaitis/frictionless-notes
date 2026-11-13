@@ -16,6 +16,7 @@ interface NoteRow {
   appearance_json: string | null;
   deleted_at: number | null;
   is_pinned: number;
+  is_locked: number;
   created_at: number;
   updated_at: number;
 }
@@ -58,7 +59,7 @@ function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 async function loadNotesByTrashState(trashed: boolean): Promise<Note[]> {
   const database = await getDatabase();
   const noteRows = await database.getAllAsync<NoteRow>(
-    `SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, deleted_at, is_pinned, created_at, updated_at
+    `SELECT id, title, type, editor_mode, body, blocks_json, appearance_json, deleted_at, is_pinned, is_locked, created_at, updated_at
      FROM notes WHERE deleted_at IS ${trashed ? 'NOT NULL' : 'NULL'} ORDER BY ${trashed ? 'deleted_at DESC' : 'updated_at DESC'}`,
   );
   const itemRows = await database.getAllAsync<ItemRow>(
@@ -91,6 +92,7 @@ async function loadNotesByTrashState(trashed: boolean): Promise<Note[]> {
       updatedAt: row.updated_at,
       deletedAt: row.deleted_at,
       isPinned: row.is_pinned === 1,
+      isLocked: row.is_locked === 1,
       items: itemsByNote.get(row.id) ?? [],
     };
   });
@@ -108,7 +110,7 @@ export async function insertNote(note: Note): Promise<void> {
   const database = await getDatabase();
   const { storedType, editorMode } = encodeNoteType(note.type);
   await database.runAsync(
-    'INSERT INTO notes (id, title, type, editor_mode, body, blocks_json, appearance_json, is_pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO notes (id, title, type, editor_mode, body, blocks_json, appearance_json, is_pinned, is_locked, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     note.id,
     note.title,
     storedType,
@@ -117,6 +119,7 @@ export async function insertNote(note: Note): Promise<void> {
     isDocumentNote(note.type) ? JSON.stringify(note.blocks) : null,
     JSON.stringify(note.appearance),
     note.isPinned ? 1 : 0,
+    note.isLocked ? 1 : 0,
     note.createdAt,
     note.updatedAt,
   );
@@ -126,7 +129,7 @@ export async function updateNote(note: Note): Promise<void> {
   const database = await getDatabase();
   const { storedType, editorMode } = encodeNoteType(note.type);
   await database.runAsync(
-    'UPDATE notes SET title = ?, type = ?, editor_mode = ?, body = ?, blocks_json = ?, appearance_json = ?, is_pinned = ?, updated_at = ? WHERE id = ?',
+    'UPDATE notes SET title = ?, type = ?, editor_mode = ?, body = ?, blocks_json = ?, appearance_json = ?, is_pinned = ?, is_locked = ?, updated_at = ? WHERE id = ?',
     note.title,
     storedType,
     editorMode,
@@ -134,6 +137,7 @@ export async function updateNote(note: Note): Promise<void> {
     isDocumentNote(note.type) ? JSON.stringify(note.blocks) : null,
     JSON.stringify(note.appearance),
     note.isPinned ? 1 : 0,
+    note.isLocked ? 1 : 0,
     note.updatedAt,
     note.id,
   );
@@ -299,57 +303,41 @@ export async function removeReminder(reminderId: string): Promise<void> {
   await database.runAsync('DELETE FROM reminders WHERE id = ?', reminderId);
 }
 
+const preferenceKeys = [
+  'remindersEnabled', 'afterWorkTime', 'highlightPinnedNotes', 'themeMode',
+  'quickNoteToolbarMode', 'appLockEnabled', 'screenPrivacy', 'sortMode',
+] as const satisfies ReadonlyArray<keyof AppPreferences>;
+
 export async function loadPreferences(): Promise<AppPreferences> {
   const database = await getDatabase();
-  const rows = await database.getAllAsync<{ key: string; value: string }>(
-    'SELECT key, value FROM app_settings WHERE key IN (?, ?, ?, ?, ?)',
-    'remindersEnabled',
-    'afterWorkTime',
-    'highlightPinnedNotes',
-    'themeMode',
-    'quickNoteToolbarMode',
-  );
+  const rows = await database.getAllAsync<{ key: string; value: string }>('SELECT key, value FROM app_settings');
   const stored = new Map(rows.map((row) => [row.key, row.value]));
+  const flag = (key: 'remindersEnabled' | 'highlightPinnedNotes' | 'appLockEnabled' | 'screenPrivacy'): boolean =>
+    stored.get(key) === undefined ? defaultPreferences[key] : stored.get(key) === 'true';
+  const themeMode = stored.get('themeMode');
+  const sortMode = stored.get('sortMode');
+  const afterWorkTime = stored.get('afterWorkTime');
   return {
-    remindersEnabled: stored.get('remindersEnabled') === undefined
-      ? defaultPreferences.remindersEnabled
-      : stored.get('remindersEnabled') === 'true',
-    afterWorkTime: stored.get('afterWorkTime') ?? defaultPreferences.afterWorkTime,
-    highlightPinnedNotes: stored.get('highlightPinnedNotes') === undefined
-      ? defaultPreferences.highlightPinnedNotes
-      : stored.get('highlightPinnedNotes') === 'true',
-    themeMode: stored.get('themeMode') === 'dark' ? 'dark' : 'light',
+    remindersEnabled: flag('remindersEnabled'),
+    afterWorkTime: afterWorkTime && /^\d{2}:\d{2}$/.test(afterWorkTime) ? afterWorkTime : defaultPreferences.afterWorkTime,
+    highlightPinnedNotes: flag('highlightPinnedNotes'),
+    themeMode: themeMode === 'dark' || themeMode === 'light' || themeMode === 'system' ? themeMode : defaultPreferences.themeMode,
     quickNoteToolbarMode: stored.get('quickNoteToolbarMode') === 'advanced' ? 'advanced' : 'simple',
+    appLockEnabled: flag('appLockEnabled'),
+    screenPrivacy: flag('screenPrivacy'),
+    sortMode: sortMode === 'created' || sortMode === 'title' ? sortMode : 'updated',
   };
 }
 
 export async function savePreferences(preferences: AppPreferences): Promise<void> {
   const database = await getDatabase();
   await database.withExclusiveTransactionAsync(async (transaction) => {
-    await transaction.runAsync(
-      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      'remindersEnabled',
-      String(preferences.remindersEnabled),
-    );
-    await transaction.runAsync(
-      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      'afterWorkTime',
-      preferences.afterWorkTime,
-    );
-    await transaction.runAsync(
-      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      'highlightPinnedNotes',
-      String(preferences.highlightPinnedNotes),
-    );
-    await transaction.runAsync(
-      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      'themeMode',
-      preferences.themeMode,
-    );
-    await transaction.runAsync(
-      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      'quickNoteToolbarMode',
-      preferences.quickNoteToolbarMode,
-    );
+    for (const key of preferenceKeys) {
+      await transaction.runAsync(
+        'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        key,
+        String(preferences[key]),
+      );
+    }
   });
 }

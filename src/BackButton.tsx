@@ -1,5 +1,7 @@
 import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { styles as appStyles } from './styles';
+import { palette } from './theme';
+import { Icon } from './ui/Icon';
 
 export function BackButton({ label, accessibilityLabel, onPress, style }: {
   label: string;
@@ -12,9 +14,9 @@ export function BackButton({ label, accessibilityLabel, onPress, style }: {
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={[appStyles.headerAction, style]}
+      style={({ pressed }) => [appStyles.headerAction, style, pressed && appStyles.pressed]}
     >
-      <Text style={appStyles.backArrow}>‹</Text>
+      <Icon name="chevronLeft" size={24} color={palette.ink} />
       <Text style={appStyles.headerActionText}>{label}</Text>
     </Pressable>
   );
